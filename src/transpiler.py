@@ -1,4 +1,4 @@
-"""AI transpiler and executor for .noco files using Groq Cloud."""
+"""Local Rule-Based Transpiler and Executor for .noco files."""
 
 from __future__ import annotations
 
@@ -6,54 +6,73 @@ import argparse
 import os
 import subprocess
 import sys
-from groq import Groq
 
 
-def transpile_to_python(source: str) -> str:
-    """Uses the official Groq SDK to bypass academic web-proxy string filters."""
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        raise ValueError("Please set the GROQ_API_KEY environment variable.")
+def transpile_locally(source: str) -> str:
+    """Parses rules locally on the server without triggering academic network blocks."""
+    lines = source.splitlines()
+    python_lines = []
 
-    # Using the official native Groq client package
-    client = Groq(api_key=api_key)
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
 
-    system_instruction = (
-        "You are an expert transpiler. Analyze the provided input text, unstructured instructions, or pseudo-code.\n"
-        "Infer the core programming logic and intent, then rewrite it entirely into a functional, syntactically correct Python script.\n\n"
-        "Ensure all formatting, logic flows, variables, and outputs map accurately to valid Python code.\n"
-        "Do not include any Markdown syntax, code block formatting (like ```python), chat preamble, or explanations.\n"
-        "Output ONLY raw executable Python text. If you must use quotes, ensure they are properly closed."
-    )
+        # Look for custom variable declaration syntax: "x is 5" or "x make 10"
+        if " is " in stripped:
+            left, right = stripped.split(" is ", 1)
+            python_lines.append(f"{left.strip()} = {right.strip()}")
+            continue
+        elif " make " in stripped:
+            left, right = stripped.split(" make ", 1)
+            python_lines.append(f"{left.strip()} = {right.strip()}")
+            continue
+        elif " assign " in stripped:
+            left, right = stripped.split(" assign ", 1)
+            python_lines.append(f"{left.strip()} = {right.strip()}")
+            continue
 
-    try:
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-specdec",
-            messages=[
-                {"role": "system", "content": system_instruction},
-                {"role": "user", "content": source}
-            ],
-            temperature=0.1
-        )
-        
-        raw_python = response.choices[0].message.content
-        
-        # Clean out any accidental markdown code fences line by line
-        clean_lines = []
-        for line in raw_python.splitlines():
-            if not line.strip().startswith("```"):
-                clean_lines.append(line)
-        raw_python = "\n".join(clean_lines)
-            
-        return raw_python.strip()
+        # Look for custom loop structures: "loop 3 times"
+        if stripped.startswith("loop ") and " times" in stripped:
+            try:
+                times = stripped.replace("loop ", "").replace(" times", "").strip()
+                python_lines.append(f"for _ in range({times}):")
+            except ValueError:
+                pass
+            continue
 
-    except Exception as e:
-        return f'print("Error connecting via Groq SDK: {str(e)}")'
+        # Check for generic indents or variable logic adjustments
+        if stripped.startswith("add ") and " to " in stripped:
+            # Format: add 2 to x -> x += 2
+            content = stripped.replace("add ", "")
+            value, var_name = content.split(" to ", 1)
+            python_lines.append(f"  {var_name.strip()} += {value.strip()}")
+            continue
+
+        # Check for variable outputs or terminal display calls
+        if stripped.startswith("shw ") or stripped.startswith("prnt "):
+            var_target = stripped.split(" ", 1)[1]
+            python_lines.append(f"print({var_target.strip()})")
+            continue
+        elif stripped.startswith("display text "):
+            # Custom handler for compound text/variable outputs
+            content = stripped.replace("display text ", "")
+            if " and then show " in content:
+                text_part, var_part = content.split(" and then show ", 1)
+                python_lines.append(f"  print({text_part.strip()} + str({var_part.strip()}))")
+            else:
+                python_lines.append(f"print({content.strip()})")
+            continue
+
+        # Fallback tracking for pre-formated standard patterns
+        python_lines.append(stripped)
+
+    return "\n".join(python_lines)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run .noco files via official Groq SDK connections"
+        description="Run local network-free .noco syntax compilers"
     )
     parser.add_argument("source_file", help="Path to the .noco file")
     args = parser.parse_args()
@@ -70,9 +89,10 @@ def main() -> None:
         print(f"Error: File not found at {target_path}", file=sys.stderr)
         sys.exit(1)
 
-    python_code = transpile_to_python(source)
+    # Compile the file rules strictly without making web calls
+    python_code = transpile_locally(source)
 
-    # Directly execute the generated Python logic strings safely
+    # Safely execute the resulting script logic mapping string
     subprocess.run([sys.executable, "-c", python_code])
 
 
