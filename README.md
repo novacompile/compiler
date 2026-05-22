@@ -21,17 +21,17 @@ recover from malformed syntax and transpile intent into a target language.
 List supported languages:
 
 ```bash
-python /home/runner/work/compiler/compiler/ai_compiler.py --list-languages
+python ai_compiler.py --list-languages
 ```
 
 Compile from a file:
 
 ```bash
-python /home/runner/work/compiler/compiler/ai_compiler.py input.txt --language javascript
+python ai_compiler.py input.txt --language javascript
 ```
 
 Compile from inline text:
 
 ```bash
-python /home/runner/work/compiler/compiler/ai_compiler.py --text "prnit hello world" --language python
+python ai_compiler.py --text "prnit hello world" --language python
 ```
