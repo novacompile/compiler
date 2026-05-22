@@ -1,8 +1,9 @@
-"""AI syntax-correcting compiler/transpiler using Groq Cloud (Located in src/)."""
+"""AI syntax-correcting compiler/transpiler using Groq Cloud Function Calling."""
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from typing import Iterable, List, Literal, Tuple
 from openai import OpenAI
@@ -36,22 +37,22 @@ def list_languages() -> List[str]:
 
 
 def _extract_statements_ml(source: str) -> List[Statement]:
-    """Uses Groq to understand user intent and parse messy text into clean structured data structures."""
+    """Uses Groq Tool Calling to safely extract structured text patterns without HTTP 405 blocks."""
     if not os.environ.get("GROQ_API_KEY"):
         raise ValueError("Please set the GROQ_API_KEY environment variable.")
 
     client = OpenAI(
-        base_url="https://groq.com",
+        base_url="https://api.groq.com/openai/v1",
         api_key=os.environ.get("GROQ_API_KEY"),
     )
 
     prompt = f"""
-    You are the parsing frontend of a compiler. Analyze the following poorly formatted, 
-    broken, or pseudo-code text line by line. Infer the user's true intent.
+    Analyze the following poorly formatted, broken, or pseudo-code text line by line.
+    Infer the user's true intent.
     
     Extract every variable assignment or print operation. 
     Fix typos in keywords (e.g., 'prnt', 'shw', 'display' should become 'print').
-    Ensure values are formatted correctly as standard programming literals (e.g., wrap raw text strings in quotes).
+    Ensure values are formatted correctly as standard programming literals.
 
     Input Code to Parse:
     \"\"\"
@@ -59,24 +60,39 @@ def _extract_statements_ml(source: str) -> List[Statement]:
     \"\"\"
     """
 
-    response = client.beta.chat.completions.parse(
+    # We provide a tool function schema. Groq natively supports this structure.
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "record_program_ast",
+                "description": "Records the final verified structural syntax components of the program.",
+                "parameters": ProgramAST.model_json_schema()
+            }
+        }
+    ]
+
+    response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
-        response_format=ProgramAST,
+        tools=tools,
+        tool_choice={"type": "function", "function": {"name": "record_program_ast"}},
         temperature=0.1,
     )
 
     try:
-        parsed_data = response.choices.message.parsed
-        if not parsed_data:
-            return [("print", '"<Failed to parse input via Groq>"', "")]
+        # Extract the structural argument fields passed to our virtual function tool
+        tool_call = response.choices[0].message.tool_calls[0]
+        json_string = tool_call.function.arguments
+        
+        parsed_data = ProgramAST.model_validate_json(json_string)
         
         statements: List[Statement] = []
         for stmt in parsed_data.statements:
             statements.append((stmt.kind, stmt.left, stmt.right))
         return statements
     except Exception:
-        return [("print", '"<Structural parsing exception occurred>"', "")]
+        return [("print", '"<Structural parsing error via tool-call routing>"', "")]
 
 
 def _emit_body(statements: Iterable[Statement], language: str) -> List[str]:
@@ -162,7 +178,6 @@ def main() -> None:
     if args.text is not None:
         source = args.text
     elif args.source_file:
-        # Use absolute path checking so it resolves correctly even when called from the root folder
         target_path = os.path.abspath(args.source_file)
         with open(target_path, "r", encoding="utf-8") as handle:
             source = handle.read()
