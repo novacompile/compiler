@@ -1,4 +1,4 @@
-"""AI transpiler and executor for .noco files using Groq Cloud."""
+"""AI transpiler and executor for .no files using Groq Cloud."""
 
 from __future__ import annotations
 
@@ -31,7 +31,6 @@ def transpile_to_python(source: str) -> str:
     )
 
     payload = {
-        # Updated to the active production flagship model
         "model": "openai/gpt-oss-120b",
         "messages": [
             {"role": "system", "content": system_instruction},
@@ -44,14 +43,12 @@ def transpile_to_python(source: str) -> str:
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         
         if response.status_code != 200:
-            # Escape inner quotes safely to prevent sub-process generation string crashes
             safe_msg = response.text.replace('"', '\\"')
             return f'print("API Error (Status {response.status_code}): {safe_msg}")'
             
         data = response.json()
         raw_python = data["choices"][0]["message"]["content"]
         
-        # Safely clean out any accidental markdown code fences line by line
         clean_lines = []
         for line in raw_python.splitlines():
             if not line.strip().startswith("```"):
@@ -66,13 +63,14 @@ def transpile_to_python(source: str) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run .noco files via cloud-based AI transpilation"
+        description="Run .no files via cloud-based AI transpilation"
     )
-    parser.add_argument("source_file", help="Path to the .noco file")
+    parser.add_argument("source_file", help="Path to the .no file")
     args = parser.parse_args()
 
-    if not args.source_file.endswith(".noco"):
-        print("Error: Input file must have a .noco extension.", file=sys.stderr)
+    # Updated verification line for .no extension
+    if not args.source_file.endswith(".no"):
+        print("Error: Input file must have a .no extension.", file=sys.stderr)
         sys.exit(1)
 
     target_path = os.path.abspath(args.source_file)
@@ -84,8 +82,6 @@ def main() -> None:
         sys.exit(1)
 
     python_code = transpile_to_python(source)
-
-    # Execute the generated cloud-AI Python script safely
     subprocess.run([sys.executable, "-c", python_code])
 
 
