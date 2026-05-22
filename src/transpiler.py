@@ -3,62 +3,71 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
-from openai import OpenAI
-from pydantic import BaseModel, Field
-
-
-class TranspiledProgram(BaseModel):
-    python_code: str = Field(
-        description="The complete, working, executable Python script rewritten from the input text."
-    )
+import requests
 
 
 def transpile_to_python(source: str) -> str:
-    """Uses Groq Structured Outputs to reliably rewrite text into functional Python code."""
-    if not os.environ.get("GROQ_API_KEY"):
+    """Sends a raw HTTP POST request to Groq to completely bypass OpenAI SDK routing anomalies."""
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
         raise ValueError("Please set the GROQ_API_KEY environment variable.")
 
-    client = OpenAI(
-        base_url="https://groq.com",
-        api_key=os.environ.get("GROQ_API_KEY"),
+    url = "https://groq.com"
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+
+    system_instruction = (
+        "You are an expert transpiler. Analyze the provided input text, unstructured instructions, or pseudo-code.\n"
+        "Infer the core programming logic and intent, then rewrite it entirely into a functional, syntactically correct Python script.\n\n"
+        "Ensure all formatting, logic flows, variables, and outputs map accurately to valid Python code.\n"
+        "Do not include any Markdown syntax, code block formatting (like ```python), chat preamble, or explanations.\n"
+        "Output ONLY raw executable Python text. If you must use quotes, ensure they are properly closed."
     )
 
-    system_instruction = f"""
-    You are an expert transpiler. Analyze the provided input text, unstructured instructions, or pseudo-code.
-    Infer the core programming logic and intent, then rewrite it entirely into a functional, syntactically correct Python script.
-    
-    Ensure all formatting, logic flows, variables, and outputs map accurately to valid Python code.
-    Do not include any Markdown syntax, chat preamble, backticks, or explanations.
-    
-    You MUST respond with a JSON object that matches this schema:
-    {TranspiledProgram.model_json_schema()}
-    """
-
-    # Using standard chat completion with json_object format to fix the 405 error
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [
             {"role": "system", "content": system_instruction},
-            {"role": "user", "content": source},
+            {"role": "user", "content": source}
         ],
-        response_format={"type": "json_object"},
-        temperature=0.1,
-    )
+        "temperature": 0.1
+    }
 
     try:
-        json_string = response.choices[0].message.content
-        parsed_data = TranspiledProgram.model_validate_json(json_string)
-        return parsed_data.python_code
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        
+        # Catch and surface any exact proxy/server status errors clearly
+        if response.status_code != 200:
+            return f'print("API communication failed with Status {response.status_code}: {response.text}")'
+            
+        data = response.json()
+        raw_python = data["choices"][0]["message"]["content"]
+        
+        # Clean any accidental markdown code fences if the model adds them anyway
+        if raw_python.startswith("```"):
+            lines = raw_python.splitlines()
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            raw_python = "\n".join(lines)
+            
+        return raw_python.strip()
+
     except Exception as e:
-        return f'print("Error parsing the AI response. Details: {str(e)}")'
+        return f'print("Error connecting directly to Groq endpoint: {str(e)}")'
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run .noco files via Python transpilation"
+        description="Run .noco files via direct Groq API connections"
     )
     parser.add_argument("source_file", help="Path to the .noco file")
     args = parser.parse_args()
@@ -77,7 +86,7 @@ def main() -> None:
 
     python_code = transpile_to_python(source)
 
-    # Directly run the generated Python script
+    # Directly execute the clean raw Python script string delivered by the endpoint
     subprocess.run([sys.executable, "-c", python_code])
 
 
