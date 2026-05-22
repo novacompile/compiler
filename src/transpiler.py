@@ -8,15 +8,13 @@ import subprocess
 import sys
 import requests
 
-
 def transpile_to_python(source: str) -> str:
     """Sends a strict raw HTTP POST request to Groq without trailing routing slashes."""
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise ValueError("Please set the GROQ_API_KEY environment variable.")
 
-    # Strictly verify that there is no trailing slash on this URL
-    url = "https://api.groq.com/openai/v1/chat/completions"
+    url = "https://groq.com"
     
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -47,9 +45,9 @@ def transpile_to_python(source: str) -> str:
             return f'print("API Error (Status {response.status_code}): {response.text}")'
             
         data = response.json()
-        raw_python = data["choices"]["message"]["content"]
+        raw_python = data["choices"][0]["message"]["content"]  # Fixed array indexing here too
         
-        # Clean any accidental markdown code fences if the model appends them
+        # Safely clean out any accidental markdown code fences line by line
         clean_lines = []
         for line in raw_python.splitlines():
             if not line.strip().startswith("```"):
