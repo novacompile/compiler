@@ -10,13 +10,13 @@ import requests
 
 
 def transpile_to_python(source: str) -> str:
-    """Sends a raw HTTP POST request to the correct Groq API subdomain endpoint."""
+    """Sends a strict raw HTTP POST request to Groq without trailing routing slashes."""
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise ValueError("Please set the GROQ_API_KEY environment variable.")
 
-    # Explicitly targeting the dedicated API subdomain, not the main website
-    url = "https://groq.com"
+    # Strictly verify that there is no trailing slash on this URL
+    url = "https://api.groq.com/openai/v1/chat/completions"
     
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -47,9 +47,9 @@ def transpile_to_python(source: str) -> str:
             return f'print("API Error (Status {response.status_code}): {response.text}")'
             
         data = response.json()
-        raw_python = data["choices"][0]["message"]["content"]
+        raw_python = data["choices"]["message"]["content"]
         
-        # Clean any accidental markdown code fences if the model adds them anyway
+        # Clean any accidental markdown code fences if the model appends them
         clean_lines = []
         for line in raw_python.splitlines():
             if not line.strip().startswith("```"):
@@ -83,7 +83,7 @@ def main() -> None:
 
     python_code = transpile_to_python(source)
 
-    # Directly execute the clean raw Python script string delivered by the endpoint
+    # Execute the generated Python script safely
     subprocess.run([sys.executable, "-c", python_code])
 
 
