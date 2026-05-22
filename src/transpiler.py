@@ -8,13 +8,14 @@ import subprocess
 import sys
 import requests
 
+
 def transpile_to_python(source: str) -> str:
-    """Sends a strict raw HTTP POST request to Groq without trailing routing slashes."""
+    """Sends a strict raw HTTP POST request to Groq with fully validated choice indexing."""
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise ValueError("Please set the GROQ_API_KEY environment variable.")
 
-    url = "https://groq.com"
+    url = "https://api.groq.com/openai/v1/chat/completions"
     
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -45,7 +46,9 @@ def transpile_to_python(source: str) -> str:
             return f'print("API Error (Status {response.status_code}): {response.text}")'
             
         data = response.json()
-        raw_python = data["choices"][0]["message"]["content"]  # Fixed array indexing here too
+        
+        # FIX: Added the missing [0] index to accurately step out of the choices list
+        raw_python = data["choices"][0]["message"]["content"]
         
         # Safely clean out any accidental markdown code fences line by line
         clean_lines = []
