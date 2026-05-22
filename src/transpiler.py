@@ -9,13 +9,15 @@ import sys
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
+
 class TranspiledProgram(BaseModel):
     python_code: str = Field(
         description="The complete, working, executable Python script rewritten from the input text."
     )
 
+
 def transpile_to_python(source: str) -> str:
-    """Uses Groq Tool Calling to reliably rewrite text into functional Python code."""
+    """Uses Groq Structured Outputs to reliably rewrite text into functional Python code."""
     if not os.environ.get("GROQ_API_KEY"):
         raise ValueError("Please set the GROQ_API_KEY environment variable.")
 
@@ -24,48 +26,40 @@ def transpile_to_python(source: str) -> str:
         api_key=os.environ.get("GROQ_API_KEY"),
     )
 
-    prompt = f"""
-    Analyze the following input text, unstructured instructions, or pseudo-code.
+    system_instruction = f"""
+    You are an expert transpiler. Analyze the provided input text, unstructured instructions, or pseudo-code.
     Infer the core programming logic and intent, then rewrite it entirely into a functional, syntactically correct Python script.
     
     Ensure all formatting, logic flows, variables, and outputs map accurately to valid Python code.
-    Do not include any Markdown syntax, chat preamble, or explanations.
-
-    Input to Convert:
-    \"\"\"
-    {source}
-    \"\"\"
+    Do not include any Markdown syntax, chat preamble, backticks, or explanations.
+    
+    You MUST respond with a JSON object that matches this schema:
+    {TranspiledProgram.model_json_schema()}
     """
 
-    tools = [
-        {
-            "type": "function",
-            "function": {
-                "name": "submit_python_code",
-                "description": "Submits the final compiled and working Python code.",
-                "parameters": TranspiledProgram.model_json_schema()
-            }
-        }
-    ]
-
+    # Using standard chat completion with json_object format to fix the 405 error
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        tools=tools,
-        tool_choice="submit_python_code",
+        messages=[
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": source},
+        ],
+        response_format={"type": "json_object"},
         temperature=0.1,
     )
 
     try:
-        tool_call = response.choices[0].message.tool_calls[0]
-        json_string = tool_call.function.arguments
+        json_string = response.choices[0].message.content
         parsed_data = TranspiledProgram.model_validate_json(json_string)
         return parsed_data.python_code
-    except Exception:
-        return 'print("Error: The AI was unable to transpile this file into valid Python.")'
+    except Exception as e:
+        return f'print("Error parsing the AI response. Details: {str(e)}")'
+
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run .noco files via Python transpilation")
+    parser = argparse.ArgumentParser(
+        description="Run .noco files via Python transpilation"
+    )
     parser.add_argument("source_file", help="Path to the .noco file")
     args = parser.parse_args()
 
@@ -85,6 +79,7 @@ def main() -> None:
 
     # Directly run the generated Python script
     subprocess.run([sys.executable, "-c", python_code])
+
 
 if __name__ == "__main__":
     main()
