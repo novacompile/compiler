@@ -1,4 +1,4 @@
-# compiler
+# Nova Compiler
 Central compiler for Nova
 
 ## AI syntax-correcting compiler (Python)
