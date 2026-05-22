@@ -10,12 +10,12 @@ import requests
 
 
 def transpile_to_python(source: str) -> str:
-    """Sends a strict raw HTTP POST request to Groq with fully validated choice indexing."""
+    """Sends a raw HTTP POST request using a currently supported production Groq model ID."""
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise ValueError("Please set the GROQ_API_KEY environment variable.")
 
-    url = "https://api.groq.com/openai/v1/chat/completions"
+    url = "https://groq.com"
     
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -31,7 +31,8 @@ def transpile_to_python(source: str) -> str:
     )
 
     payload = {
-        "model": "llama-3.3-70b-versatile",
+        # FIX: Switched to the active production/speculative decoding model variant
+        "model": "llama-3.3-70b-specdec",
         "messages": [
             {"role": "system", "content": system_instruction},
             {"role": "user", "content": source}
@@ -46,8 +47,6 @@ def transpile_to_python(source: str) -> str:
             return f'print("API Error (Status {response.status_code}): {response.text}")'
             
         data = response.json()
-        
-        # FIX: Added the missing [0] index to accurately step out of the choices list
         raw_python = data["choices"][0]["message"]["content"]
         
         # Safely clean out any accidental markdown code fences line by line
