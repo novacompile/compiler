@@ -1,6 +1,6 @@
 <div align="center">
   <img src="static/logo.png" width="200px" height="200px" />
-  <h1>Nova - v1.0.0</h1>
+  <h1>Nova - v1.0.2</h1>
   <hr /><br />
 </div>
 
