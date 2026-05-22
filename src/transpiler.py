@@ -1,4 +1,4 @@
-"""Local Rule-Based Transpiler and Executor for .noco files."""
+"""AI transpiler and executor for .noco files using Groq Cloud."""
 
 from __future__ import annotations
 
@@ -6,73 +6,67 @@ import argparse
 import os
 import subprocess
 import sys
+import requests
 
 
-def transpile_locally(source: str) -> str:
-    """Parses rules locally on the server without triggering academic network blocks."""
-    lines = source.splitlines()
-    python_lines = []
+def transpile_to_python(source: str) -> str:
+    """Sends a raw HTTP POST request using an active production Groq model ID."""
+    api_key = os.environ.get("GROQ_API_KEY")
+    if not api_key:
+        raise ValueError("Please set the GROQ_API_KEY environment variable.")
 
-    for line in lines:
-        stripped = line.strip()
-        if not stripped:
-            continue
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
 
-        # Look for custom variable declaration syntax: "x is 5" or "x make 10"
-        if " is " in stripped:
-            left, right = stripped.split(" is ", 1)
-            python_lines.append(f"{left.strip()} = {right.strip()}")
-            continue
-        elif " make " in stripped:
-            left, right = stripped.split(" make ", 1)
-            python_lines.append(f"{left.strip()} = {right.strip()}")
-            continue
-        elif " assign " in stripped:
-            left, right = stripped.split(" assign ", 1)
-            python_lines.append(f"{left.strip()} = {right.strip()}")
-            continue
+    system_instruction = (
+        "You are an expert transpiler. Analyze the provided input text, unstructured instructions, or pseudo-code.\n"
+        "Infer the core programming logic and intent, then rewrite it entirely into a functional, syntactically correct Python script.\n\n"
+        "Ensure all formatting, logic flows, variables, and outputs map accurately to valid Python code.\n"
+        "Do not include any Markdown syntax, code block formatting (like ```python), chat preamble, or explanations.\n"
+        "Output ONLY raw executable Python text. If you must use quotes, ensure they are properly closed."
+    )
 
-        # Look for custom loop structures: "loop 3 times"
-        if stripped.startswith("loop ") and " times" in stripped:
-            try:
-                times = stripped.replace("loop ", "").replace(" times", "").strip()
-                python_lines.append(f"for _ in range({times}):")
-            except ValueError:
-                pass
-            continue
+    payload = {
+        # Updated to the active production flagship model
+        "model": "openai/gpt-oss-120b",
+        "messages": [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": source}
+        ],
+        "temperature": 0.1
+    }
 
-        # Check for generic indents or variable logic adjustments
-        if stripped.startswith("add ") and " to " in stripped:
-            # Format: add 2 to x -> x += 2
-            content = stripped.replace("add ", "")
-            value, var_name = content.split(" to ", 1)
-            python_lines.append(f"  {var_name.strip()} += {value.strip()}")
-            continue
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        
+        if response.status_code != 200:
+            # Escape inner quotes safely to prevent sub-process generation string crashes
+            safe_msg = response.text.replace('"', '\\"')
+            return f'print("API Error (Status {response.status_code}): {safe_msg}")'
+            
+        data = response.json()
+        raw_python = data["choices"][0]["message"]["content"]
+        
+        # Safely clean out any accidental markdown code fences line by line
+        clean_lines = []
+        for line in raw_python.splitlines():
+            if not line.strip().startswith("```"):
+                clean_lines.append(line)
+        raw_python = "\n".join(clean_lines)
+            
+        return raw_python.strip()
 
-        # Check for variable outputs or terminal display calls
-        if stripped.startswith("shw ") or stripped.startswith("prnt "):
-            var_target = stripped.split(" ", 1)[1]
-            python_lines.append(f"print({var_target.strip()})")
-            continue
-        elif stripped.startswith("display text "):
-            # Custom handler for compound text/variable outputs
-            content = stripped.replace("display text ", "")
-            if " and then show " in content:
-                text_part, var_part = content.split(" and then show ", 1)
-                python_lines.append(f"  print({text_part.strip()} + str({var_part.strip()}))")
-            else:
-                python_lines.append(f"print({content.strip()})")
-            continue
-
-        # Fallback tracking for pre-formated standard patterns
-        python_lines.append(stripped)
-
-    return "\n".join(python_lines)
+    except Exception as e:
+        return f'print("Error connecting to Groq API endpoint: {str(e)}")'
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run local network-free .noco syntax compilers"
+        description="Run .noco files via cloud-based AI transpilation"
     )
     parser.add_argument("source_file", help="Path to the .noco file")
     args = parser.parse_args()
@@ -89,10 +83,9 @@ def main() -> None:
         print(f"Error: File not found at {target_path}", file=sys.stderr)
         sys.exit(1)
 
-    # Compile the file rules strictly without making web calls
-    python_code = transpile_locally(source)
+    python_code = transpile_to_python(source)
 
-    # Safely execute the resulting script logic mapping string
+    # Execute the generated cloud-AI Python script safely
     subprocess.run([sys.executable, "-c", python_code])
 
 
