@@ -1,5 +1,5 @@
 <div align="center">
-  <b>Compiler</b><br />
+  <h1>Compiler</h1><br />
   <sub>Nova Compile</sub>
   <hr /><br />
 </div>
