@@ -52,7 +52,7 @@ def transpile_to_python(source: str) -> str:
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
         tools=tools,
-        tool_choice={"type": "function", "function": {"name": "submit_python_code"}},
+        tool_choice="submit_python_code",
         temperature=0.1,
     )
 
