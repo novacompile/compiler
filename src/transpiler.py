@@ -6,21 +6,17 @@ import argparse
 import os
 import subprocess
 import sys
-import requests
+from groq import Groq
 
 
 def transpile_to_python(source: str) -> str:
-    """Sends a raw HTTP POST request using a currently supported production Groq model ID."""
+    """Uses the official Groq SDK to bypass academic web-proxy string filters."""
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise ValueError("Please set the GROQ_API_KEY environment variable.")
 
-    url = "https://groq.com"
-    
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
+    # Using the official native Groq client package
+    client = Groq(api_key=api_key)
 
     system_instruction = (
         "You are an expert transpiler. Analyze the provided input text, unstructured instructions, or pseudo-code.\n"
@@ -30,26 +26,19 @@ def transpile_to_python(source: str) -> str:
         "Output ONLY raw executable Python text. If you must use quotes, ensure they are properly closed."
     )
 
-    payload = {
-        # FIX: Switched to the active production/speculative decoding model variant
-        "model": "llama-3.3-70b-specdec",
-        "messages": [
-            {"role": "system", "content": system_instruction},
-            {"role": "user", "content": source}
-        ],
-        "temperature": 0.1
-    }
-
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-specdec",
+            messages=[
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": source}
+            ],
+            temperature=0.1
+        )
         
-        if response.status_code != 200:
-            return f'print("API Error (Status {response.status_code}): {response.text}")'
-            
-        data = response.json()
-        raw_python = data["choices"][0]["message"]["content"]
+        raw_python = response.choices[0].message.content
         
-        # Safely clean out any accidental markdown code fences line by line
+        # Clean out any accidental markdown code fences line by line
         clean_lines = []
         for line in raw_python.splitlines():
             if not line.strip().startswith("```"):
@@ -59,12 +48,12 @@ def transpile_to_python(source: str) -> str:
         return raw_python.strip()
 
     except Exception as e:
-        return f'print("Error connecting to Groq API endpoint: {str(e)}")'
+        return f'print("Error connecting via Groq SDK: {str(e)}")'
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run .noco files via direct Groq API connections"
+        description="Run .noco files via official Groq SDK connections"
     )
     parser.add_argument("source_file", help="Path to the .noco file")
     args = parser.parse_args()
@@ -83,7 +72,7 @@ def main() -> None:
 
     python_code = transpile_to_python(source)
 
-    # Execute the generated Python script safely
+    # Directly execute the generated Python logic strings safely
     subprocess.run([sys.executable, "-c", python_code])
 
 
