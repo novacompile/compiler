@@ -1,9 +1,9 @@
 import unittest
 
-from ai_compiler import compile_code, list_languages
+from src.syntax_compiler import compile_code, list_languages
 
 
-class AICompilerTests(unittest.TestCase):
+class SyntaxCompilerTests(unittest.TestCase):
     def test_lists_supported_languages(self):
         self.assertEqual(
             list_languages(),
