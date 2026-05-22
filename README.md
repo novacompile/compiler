@@ -1,5 +1,6 @@
 <div align="center">
-  <h1>Compiler</h1><br />
+  <img src="static/logo.png" width="200px" height="200px" />
+  <h1>Compiler</h1>
   <sub>Nova Compile</sub>
   <hr /><br />
 </div>
