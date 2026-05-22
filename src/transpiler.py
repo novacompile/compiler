@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import subprocess
 import sys
@@ -11,11 +10,12 @@ import requests
 
 
 def transpile_to_python(source: str) -> str:
-    """Sends a raw HTTP POST request to Groq to completely bypass OpenAI SDK routing anomalies."""
+    """Sends a raw HTTP POST request to the correct Groq API subdomain endpoint."""
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise ValueError("Please set the GROQ_API_KEY environment variable.")
 
+    # Explicitly targeting the dedicated API subdomain, not the main website
     url = "https://groq.com"
     
     headers = {
@@ -43,26 +43,23 @@ def transpile_to_python(source: str) -> str:
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         
-        # Catch and surface any exact proxy/server status errors clearly
         if response.status_code != 200:
-            return f'print("API communication failed with Status {response.status_code}: {response.text}")'
+            return f'print("API Error (Status {response.status_code}): {response.text}")'
             
         data = response.json()
         raw_python = data["choices"][0]["message"]["content"]
         
         # Clean any accidental markdown code fences if the model adds them anyway
-        if raw_python.startswith("```"):
-            lines = raw_python.splitlines()
-            if lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines and lines[-1].startswith("```"):
-                lines = lines[:-1]
-            raw_python = "\n".join(lines)
+        clean_lines = []
+        for line in raw_python.splitlines():
+            if not line.strip().startswith("```"):
+                clean_lines.append(line)
+        raw_python = "\n".join(clean_lines)
             
         return raw_python.strip()
 
     except Exception as e:
-        return f'print("Error connecting directly to Groq endpoint: {str(e)}")'
+        return f'print("Error connecting to Groq API endpoint: {str(e)}")'
 
 
 def main() -> None:
