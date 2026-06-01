@@ -40,7 +40,18 @@ alias nova="python $(pwd)/src/transpiler.py"
 
 Once configured, create a custom code file using your preferred pseudo-syntax or simplified structures. 
 
-### 1. Create a Nova File (`script.no`)
+### 1. Start the Interactive Shell
+Launch the shell directly to type Nova code interactively:
+
+```bash
+nova
+```
+
+If you run the transpiler without a file argument, it starts this shell automatically.
+
+In shell mode, type a block of Nova code, then press Enter on an empty line to transpile and run it. Use `exit` or `quit` to leave.
+
+### 2. Create a Nova File (`script.no`)
 Create a file named `script.no` containing your custom logic:
 
 ```text
@@ -55,9 +66,15 @@ loop 3 times
     print "Current count value is: " + counter
 ```
 
-### 2. Run the Compiler
+### 3. Run the Compiler
 Execute the file instantly by calling `nova` followed by your custom script target:
 
 ```bash
 nova script.no
+```
+
+If you prefer to run the entrypoint directly, this also works:
+
+```bash
+python src/transpiler.py script.no
 ```

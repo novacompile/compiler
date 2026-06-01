@@ -61,14 +61,61 @@ def transpile_to_python(source: str) -> str:
         return f'print("Error connecting to Groq API endpoint: {str(e)}")'
 
 
+def execute_python_code(python_code: str) -> int:
+    """Run generated Python code in a fresh interpreter process."""
+    completed = subprocess.run([sys.executable, "-c", python_code])
+    return completed.returncode
+
+
+def run_shell() -> None:
+    """Start an interactive shell that transpiles and executes each submitted block."""
+    print("Nova shell. Submit a block, then press Enter on an empty line to run it.")
+    print("Type exit or quit to leave.")
+
+    buffer: list[str] = []
+
+    while True:
+        prompt = "nova> " if not buffer else "...   "
+
+        try:
+            line = input(prompt)
+        except EOFError:
+            print()
+            break
+
+        stripped = line.strip()
+
+        if not buffer and stripped in {"exit", "quit", ":q"}:
+            break
+
+        if not stripped:
+            if not buffer:
+                continue
+
+            source = "\n".join(buffer).strip()
+            buffer.clear()
+
+            if not source:
+                continue
+
+            python_code = transpile_to_python(source)
+            execute_python_code(python_code)
+            continue
+
+        buffer.append(line)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run .no files via cloud-based AI transpilation"
     )
-    parser.add_argument("source_file", help="Path to the .no file")
+    parser.add_argument("source_file", nargs="?", help="Path to the .no file")
     args = parser.parse_args()
 
-    # Updated verification line for .no extension
+    if args.source_file is None:
+        run_shell()
+        return
+
     if not args.source_file.endswith(".no"):
         print("Error: Input file must have a .no extension.", file=sys.stderr)
         sys.exit(1)
@@ -82,7 +129,7 @@ def main() -> None:
         sys.exit(1)
 
     python_code = transpile_to_python(source)
-    subprocess.run([sys.executable, "-c", python_code])
+    execute_python_code(python_code)
 
 
 if __name__ == "__main__":
