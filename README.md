@@ -86,3 +86,7 @@ If you prefer to run the entrypoint directly, this also works:
 ```bash
 python src/transpiler.py script.no
 ```
+
+## License
+
+Nova compile is under the [MIT License](LICENSE). Before you fork this repo, read the license first.
