@@ -95,5 +95,5 @@ Nova compile is under the [MIT License](LICENSE). Before you fork this repo, rea
 
 <br /><hr />
 <div align="right">
-[Read this document in txt format](docs/README.txt) | Nova 1.2.0
+<sub><a href="docs/README.txt">Read this document in txt format</a> | Nova 1.2.0</sub>
 </div>
