@@ -1,9 +1,7 @@
 <div align="center">
   <img src="static/logo.png" width="200px" height="200px" />
-  <h1>Nova - v1.2.0</h1>
-  <hr /><br />
+  <h1>Nova - v1.2.0</h1><br />
 </div>
-
 
 Nova is an AI-powered runtime engine and transpiler designed to execute unstructured text, pseudo-code, and custom language files (`.no`) by instantly translating them into production-ready Python code on the fly using Groq Cloud infrastructure.
 
