@@ -4,9 +4,6 @@
   <hr /><br />
 </div>
 
-[Read this document in txt format](docs/README.txt)
-
----
 
 Nova is an AI-powered runtime engine and transpiler designed to execute unstructured text, pseudo-code, and custom language files (`.no`) by instantly translating them into production-ready Python code on the fly using Groq Cloud infrastructure.
 
@@ -94,3 +91,9 @@ python src/transpiler.py script.no
 ## License
 
 Nova compile is under the [MIT License](LICENSE). Before you fork this repo, read the license first.
+
+
+<br /><hr />
+<div align="right">
+[Read this document in txt format](docs/README.txt) | Nova 1.2.0
+</div>
