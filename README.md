@@ -4,6 +4,10 @@
   <hr /><br />
 </div>
 
+[Read this document in txt format](docs/README.txt)
+
+---
+
 Nova is an AI-powered runtime engine and transpiler designed to execute unstructured text, pseudo-code, and custom language files (`.no`) by instantly translating them into production-ready Python code on the fly using Groq Cloud infrastructure.
 
 ---
