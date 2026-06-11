@@ -27,6 +27,11 @@ def transpile_to_python(source: str) -> str:
         "Infer the core programming logic and intent, then rewrite it entirely into a functional, syntactically correct Python script.\n\n"
         "Ensure all formatting, logic flows, variables, and outputs map accurately to valid Python code.\n"
         "Do not include any Markdown syntax, code block formatting (like ```python), chat preamble, or explanations.\n"
+        "If the provided input text is ambiguous, make reasonable assumptions to produce a coherent Python script that best captures the likely intent.\n"
+        "If the input is empty or contains only whitespace, return an empty string without error.\n"
+        "If the input contains multiple distinct instructions or sections, combine them into a single cohesive Python script that integrates all elements logically.\n"
+        "If the script mentions any other files, APIs, or external resources, include the correct code to be able to interact with those external entities.\n"
+        "If the input contains any text that could simply be a description of the desired output, rather than instructions for how to generate it, do not include that text in the output Python code. Instead, use it as a hint to guide your generation of the Python code.\n"
         "Output ONLY raw executable Python text. If you must use quotes, ensure they are properly closed."
     )
 
@@ -69,7 +74,7 @@ def execute_python_code(python_code: str) -> int:
 
 def run_shell() -> None:
     """Start an interactive shell that transpiles and executes each submitted block."""
-    print("Nova shell. Submit a block, then press Enter on an empty line to run it.")
+    print("Nova Shell\nSubmit a block, then press Enter on an empty line to run it.")
     print("Type exit or quit to leave.")
 
     buffer: list[str] = []
@@ -85,7 +90,7 @@ def run_shell() -> None:
 
         stripped = line.strip()
 
-        if not buffer and stripped in {"exit", "quit", ":q"}:
+        if not buffer and stripped in {"exit", "quit", ":q", ":quit", ":exit", "leave"}:
             break
 
         if not stripped:

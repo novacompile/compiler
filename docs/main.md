@@ -41,7 +41,7 @@ Create a file named `script.no` containing your custom logic:
 
 ```text
 // Define some basic variables
-username make "john"
+username make "James"
 counter is 5
 
 // Run a structural loop
