@@ -1,7 +1,8 @@
 <div align="center">
   <img src="static/logo.png" width="200px" height="200px" />
-  <h1>Nova - v1.0.2</h1>
-  <hr /><br />
+  <hr />
+  <h1>Nova - v1.2.0</h1>
+  <br />
 </div>
 
 NovaCompile is an AI-powered runtime engine and transpiler designed to execute unstructured text, pseudo-code, and custom language files (`.no`) by instantly translating them into production-ready Python code on the fly using Groq Cloud infrastructure.
@@ -9,6 +10,9 @@ NovaCompile is an AI-powered runtime engine and transpiler designed to execute u
 ---
 
 ## 🚀 Quick Start Guide
+
+To install a permenant binary global executable, run this [install script](install/global-executable.sh) and ignore step 3.
+
 
 Follow these three simple steps to configure NovaCompile inside your local workspace or web-shell environment.
 
