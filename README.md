@@ -1,7 +1,7 @@
 <div align="center">
   <img src="static/logo.png" width="200px" height="200px" />
   <hr />
-  <h1>Nova - v1.2.0</h1>
+  <h1>Nova - <p id="version">version</p></h1>
   <br />
 </div>
 
