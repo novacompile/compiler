@@ -24,8 +24,8 @@ jobs:
 
       - name: Update version in README file
         run: |
-          # Replaces the content inside <p id="version">...</p> with the new version value
-          sed -i -E 's|<p id="version">([^<]*)</p>|\1'"${{ steps.read_version.outputs.VERSION }}"'</p>|g' README.md
+          # Replaces the content inside <span id="version">...</span> with the new version value
+          sed -i -E 's|<span id="version">([^<]*)</p>|\1'"${{ steps.read_version.outputs.VERSION }}"'</span>|g' README.md
 
       - name: Commit and push changes
         run: |
