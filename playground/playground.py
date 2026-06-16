@@ -23,7 +23,7 @@ def transpile_to_python(
     system_instruction: str
 ) -> tuple[str, dict]:
     """Sends custom configuration to Groq Cloud and returns Python code and payload."""
-    url = "https://groq.com"
+    url = "https://api.groq.com/openai/v1/chat/completions"
     
     headers = {
         "Authorization": f"Bearer {api_key}",
