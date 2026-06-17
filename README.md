@@ -42,7 +42,7 @@ To run the compiler globally using the custom `nova` keyword instead of typing o
 alias nova="python $(pwd)/src/transpiler.py"
 ```
 > [!NOTE]
-> To make this shortcut permanent across terminal restarts, append the alias line above directly into your `~/.bashrc` or `~/.zshrc` configuration profile - run [this script](setup.sh) for appending to `~/.bashrc`.*
+> To make this shortcut permanent across terminal restarts, append the alias line above directly into your `~/.bashrc` or `~/.zshrc` configuration profile - run [this script](setup.sh) for appending to `~/.bashrc`.
 
 ---
 
