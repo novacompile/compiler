@@ -88,3 +88,8 @@ If you prefer to run the entrypoint directly, this also works:
 ```bash
 python src/transpiler.py script.no
 ```
+
+
+## License
+
+Nova Compiler is under the [MIT License](LICENSE).
