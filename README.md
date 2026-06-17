@@ -6,7 +6,6 @@
     <img alt="GitHub Issues Badge" src="https://img.shields.io/github/issues/novacompile/compiler?style=for-the-badge&link=https%3A%2F%2Fgithub.com%2Fnovacompile%2Fcompiler%2Fissues">
     <img alt="Version Badge" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fnovacompile%2Fcompiler%2Frefs%2Fheads%2Fmain%2F.shields%2Fversion.json&style=for-the-badge&cacheSeconds=300&link=https%3A%2F%2Fgithub.com%2Fnovacompile%2Fcompiler%2Freleases">
   </div>
-  <hr />
   <br />
 </div>
 
