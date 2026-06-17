@@ -17,6 +17,6 @@ SUBROUTINE BinarySearch(array, target)
     RETURN -1
 ENDSUBROUTINE
 
-myArray <- [2, 4, 5, 7, 9, 12]
-myTarget <- 7
-result <- BinarySearch(myArray, myTarget)
+array <- [2, 4, 5, 7, 9, 12]
+target <- 7
+result <- BinarySearch(array, target)
