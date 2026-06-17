@@ -14,7 +14,7 @@ def transpile_to_python(source: str) -> str:
     with open("key/raw.txt", "r") as file:
         api_key = file.read().strip()
         if not api_key:
-            raise ValueError("Please set the GROQ_API_KEY environment variable.")
+            raise ValueError("Please run the setup script (setup.sh) to add API key.")
 
     url = "https://api.groq.com/openai/v1/chat/completions"
     
