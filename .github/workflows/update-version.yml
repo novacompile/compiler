@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'version' # Triggers only when a file named 'version' in the root directory is modified
+  workflow_dispatch:
 
 jobs:
   update-readme:
