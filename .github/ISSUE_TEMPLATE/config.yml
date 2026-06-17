@@ -1,0 +1,10 @@
+blank_issues_enabled: true
+
+contact_links:
+  - name: Website
+    url: https://novacompile.onrender.com
+    about: View the official website for Nova
+
+  - name: Project Documentation
+    url: https://github.com/novacompile/compiler/tree/main/docs
+    about: Please review the documentation before opening a bug report to see if your answer is there.
