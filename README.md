@@ -21,11 +21,16 @@ To install a permenant binary global executable, run this [install script](insta
 
 Follow these three simple steps to configure NovaCompile inside your local workspace or web-shell environment.
 
-### 1. Set Up Your Environment
-NovaCompile requires a connection to the Groq Cloud API. Export your personal API key into your current terminal profile:
+### 1. Run Installation Script
+Run this installation script to clone the repository and add an alias and install dependencies.
 
 ```bash
-export GROQ_API_KEY="your-actual-groq-api-key-here"
+cd ~
+mkdir .novacompile
+cd .novacompile
+git clone https://github.com/novacompile/compiler.git
+cd compiler
+bash setup.sh
 ```
 
 ### 2. Install Dependencies
