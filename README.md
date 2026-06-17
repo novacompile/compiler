@@ -1,7 +1,9 @@
 <div align="center">
   <img src="static/logo.png" width="200px" height="200px" />
-  <hr />
+  <br /><br />
   <h1>Nova - <span id="version">v1.2.1</span></h1>
+  <img alt="GitHub Issues or Pull Requests" src="https://img.shields.io/github/issues/novacompile/compiler?style=for-the-badge&link=https%3A%2F%2Fgithub.com%2Fnovacompile%2Fcompiler%2Fissues">
+  <hr />
   <br />
 </div>
 
