@@ -92,4 +92,4 @@ python src/transpiler.py script.no
 
 ## License
 
-Nova Compiler is under the [MIT License](LICENSE).
+Nova Compiler is under the [MIT License](LICENSE). Make sure that you have read and understood it before reproducing this repo.
