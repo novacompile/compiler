@@ -11,9 +11,10 @@ import requests
 
 def transpile_to_python(source: str) -> str:
     """Sends a raw HTTP POST request using an active production Groq model ID."""
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        raise ValueError("Please set the GROQ_API_KEY environment variable.")
+    with open("key/raw.txt", "r") as file:
+    api_key = file.read().strip()
+        if not api_key:
+            raise ValueError("Please set the GROQ_API_KEY environment variable.")
 
     url = "https://api.groq.com/openai/v1/chat/completions"
     
