@@ -12,7 +12,7 @@ import requests
 def transpile_to_python(source: str) -> str:
     """Sends a raw HTTP POST request using an active production Groq model ID."""
     with open("key/raw.txt", "r") as file:
-    api_key = file.read().strip()
+        api_key = file.read().strip()
         if not api_key:
             raise ValueError("Please set the GROQ_API_KEY environment variable.")
 
