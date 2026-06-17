@@ -22,7 +22,7 @@ To install a permenant binary global executable, run this [install script](insta
 Follow these three simple steps to configure NovaCompile inside your local workspace or web-shell environment.
 
 ### 1. Run Installation Script
-Run this installation script to clone the repository and add an alias and install dependencies.
+Run this installation script to clone the repository to get Nova on your device.
 
 ```bash
 cd ~
@@ -30,24 +30,24 @@ mkdir .novacompile
 cd .novacompile
 git clone https://github.com/novacompile/compiler.git
 cd compiler
+```
+
+### 2. Get an a Groq API key
+Go to [console.groq.com](https://console.groq.com) and sign up for an account. Click API Keys, then create API key.
+
+> [!IMPORANT]
+> Remember to copy the key and put it in a safe and secure place straight away after creating it.
+
+
+### 3. Setup your enviroment
+Run the setup script to install the dependencies through `pip`, create a permenant alias, and install your API key.
+
+```bash
 bash setup.sh
 ```
 
-### 2. Install Dependencies
-The compiler utilizes the lightweight Python `requests` library to manage direct network handshakes and bypass SDK proxy filters:
-
-```bash
-pip install requests
-```
-
-### 3. Create the `nova` Terminal Shortcut
-To run the compiler globally using the custom `nova` keyword instead of typing out the full Python path, register a local workspace shortcut:
-
-```bash
-alias nova="python $(pwd)/src/transpiler.py"
-```
 > [!NOTE]
-> To make this shortcut permanent across terminal restarts, append the alias line above directly into your `~/.bashrc` or `~/.zshrc` configuration profile - run [this script](setup.sh) for appending to `~/.bashrc`.
+> To make this shortcut permanent across terminal restarts, the setup script appends the alias directly into your `~/.bashrc` configuration profile.
 
 ---
 
@@ -66,12 +66,12 @@ If you run the transpiler without a file argument, it starts this shell automati
 
 In shell mode, type a block of Nova code, then press Enter on an empty line to transpile and run it. Use `exit` or `quit` to leave.
 
-### 2. Create a Nova File (`script.no`)
-Create a file named `script.no` containing your custom logic:
+### 2. Create a Nova File
+Create a file with the `.no` suffix (e.g. `script.no`) containing your custom logic, for example:
 
 ```text
 // Define some basic variables
-username make "James"
+username is "john"
 counter is 5
 
 // Run a structural loop
@@ -85,14 +85,17 @@ loop 3 times
 Execute the file instantly by calling `nova` followed by your custom script target:
 
 ```bash
-nova script.no
+nova [filename].no
 ```
 
 If you prefer to run the entrypoint directly, this also works:
 
 ```bash
-python src/transpiler.py script.no
+python src/transpiler.py [filename].no
 ```
+
+> [!IMPORTANT]
+> To be able to run the entrypoint directly, you must be inside the root directory of `compiler` (by default it is `~/.novacompile/compile`)
 
 
 ## License
