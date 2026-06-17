@@ -1,0 +1,11 @@
+# guess the number game
+
+while playing:
+  set number = random()
+  set usernumber = input('enter number: ')
+  if usernumber == number:
+    print('you won!')
+    print('the number was' number)
+  else:
+    print('you lost...')
+    print('the number was' number)
