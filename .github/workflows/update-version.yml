@@ -22,20 +22,26 @@ jobs:
           VAR_VERSION=$(cat version | xargs)
           echo "VERSION=$VAR_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Update version in README file
+      - name: Update version in README and Shields JSON
         run: |
-          # Replaces the content inside <span id="version">...</span> with the new version value
-          sed -i -E 's|<span id="version">[^<]*</span>|<span id="version">v1.2.1</span>|g' README.md
+          # Replaces the content inside <span id="version">...</span> with the dynamic version value
+          sed-i-E 's|<span id="version">[^<]*</span>|<span id="version">${{ steps.read_version.outputs.VERSION }}</span>|g' README.md
+          
+          # Create shields directory if it doesn't exist
+          mkdir -p .shields
+          
+          # Write the formatted JSON JSON file
+          echo '{"schemaVersion": 1, "label": "version", "message": "${{ steps.read_version.outputs.VERSION }}", "color": "orange"}' > .shields/version.json
 
       - name: Commit and push changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
-          git add README.md
+          git add README.md .shields/version.json
           
           if ! git diff --cached --quiet; then
-            git commit -m "chore: update README version to ${{ steps.read_version.outputs.VERSION }} [skip ci]"
+            git commit -m "chore: update README and shield version to ${{ steps.read_version.outputs.VERSION }} [skip ci]"
             git push origin HEAD:${{ github.event.repository.default_branch }}
           else
             echo "No changes to commit"
