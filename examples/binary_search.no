@@ -1,0 +1,18 @@
+SUBROUTINE BinarySearch(array, target)
+    left <- 0
+    right <- LEN(array) - 1
+    
+    WHILE left <= right
+        mid <- (left + right) DIV 2
+        
+        IF array[mid] = target THEN
+            RETURN mid
+        ELSE IF array[mid] < target THEN
+            left <- mid + 1
+        ELSE
+            right <- mid - 1
+        ENDIF
+    ENDWHILE
+    
+    RETURN -1
+ENDSUBROUTINE
