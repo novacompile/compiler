@@ -1,0 +1,28 @@
+name: Check Repository Files
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  verify-contents:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify repository is not empty
+        run: |
+          # Count all items in the repository root excluding hidden dotfiles/folders (.git, .github)
+          FILE_COUNT=$(ls -A1 | grep -vE "^\.git$|^\.github$" | wc -l)
+          
+          echo "Found $FILE_COUNT visible user files/folders in the root directory."
+          
+          if [ "$FILE_COUNT" -eq 0 ]; then
+            echo "Error: The repository is empty!"
+            exit 1
+          else
+            echo "Success: Repository contains files."
+          fi
