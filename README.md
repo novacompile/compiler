@@ -35,7 +35,7 @@ cd compiler
 ### 2. Get an a Groq API key
 Go to [console.groq.com](https://console.groq.com) and sign up for an account. Click API Keys, then create API key.
 
-> [!IMPORANT]
+> [!WARNING]
 > Remember to copy the key and put it in a safe and secure place straight away after creating it.
 
 
@@ -94,7 +94,7 @@ If you prefer to run the entrypoint directly, this also works:
 python src/transpiler.py [filename].no
 ```
 
-> [!IMPORTANT]
+> [!WARNING]
 > To be able to run the entrypoint directly, you must be inside the root directory of `compiler` (by default it is `~/.novacompile/compile`)
 
 
