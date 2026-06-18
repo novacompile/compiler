@@ -1,6 +1,7 @@
 """AI transpiler and executor for .no files using Groq Cloud."""
 
 from __future__ import annotations
+from pathlib import Path
 
 import argparse
 import os
@@ -11,7 +12,9 @@ import requests
 
 def transpile_to_python(source: str) -> str:
     """Sends a raw HTTP POST request using an active production Groq model ID."""
-    with open("key/raw.txt", "r") as file:
+    src_dir = Path(__file__).resolve().parent
+    file_path = src_dir.parent / "key" / "raw.txt
+    with open(file_path, "r") as file:
         api_key = file.read().strip()
         if not api_key:
             raise ValueError("Please run the setup script (setup.sh) to add API key.")
