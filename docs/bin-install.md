@@ -1,4 +1,4 @@
-# Install Binaru Executable
+# Install Binary Executable
 
 Run [this installation script](../install/global-executable.sh), to install **Nova** as a global executable or use this to directly install the binary file to `usr/local/bin/nova`: 
 
