@@ -16,6 +16,14 @@ from typing import Optional, Dict, Any
 import requests
 
 
+# ANSI color codes
+RED = '\033[91m'
+GREEN = '\033[92m'
+YELLOW = '\033[93m'
+CYAN = '\033[96m'
+RESET = '\033[0m'
+
+
 # Global config
 CONFIG = {
     "cache_ttl": None,  # None means no expiration
@@ -27,6 +35,45 @@ CONFIG = {
     "color": True,
     "interpreter": sys.executable,
 }
+
+
+def error(msg: str) -> None:
+    """Print a red error message and exit."""
+    if CONFIG["color"]:
+        print(f"{RED}ERROR:{RESET} {msg}", file=sys.stderr)
+    else:
+        print(f"ERROR: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def warn(msg: str) -> None:
+    """Print a yellow warning message."""
+    if CONFIG["quiet"]:
+        return
+    if CONFIG["color"]:
+        print(f"{YELLOW}WARNING:{RESET} {msg}", file=sys.stderr)
+    else:
+        print(f"WARNING: {msg}", file=sys.stderr)
+
+
+def info(msg: str) -> None:
+    """Print a cyan info message (only in verbose mode)."""
+    if CONFIG["quiet"] or not CONFIG["verbose"]:
+        return
+    if CONFIG["color"]:
+        print(f"{CYAN}INFO:{RESET} {msg}", file=sys.stderr)
+    else:
+        print(f"INFO: {msg}", file=sys.stderr)
+
+
+def success(msg: str) -> None:
+    """Print a green success message."""
+    if CONFIG["quiet"]:
+        return
+    if CONFIG["color"]:
+        print(f"{GREEN}SUCCESS:{RESET} {msg}")
+    else:
+        print(f"SUCCESS: {msg}")
 
 
 def get_cache_path() -> Path:
@@ -61,8 +108,7 @@ def clear_cache() -> None:
     cache_path = get_cache_path()
     if cache_path.exists():
         cache_path.unlink()
-    if not CONFIG["quiet"]:
-        print("Cache cleared successfully.")
+    success("Cache cleared successfully.")
 
 
 def get_cache_size() -> tuple[int, int]:
@@ -71,7 +117,6 @@ def get_cache_size() -> tuple[int, int]:
     size_bytes = 0
     for key, value in cache.items():
         if isinstance(value, dict):
-            # For cache with timestamps
             size_bytes += len(json.dumps(value).encode('utf-8'))
         else:
             size_bytes += len(str(value).encode('utf-8'))
@@ -95,7 +140,6 @@ def clean_old_cache_entries(cache: dict) -> dict:
             if now - value["timestamp"] <= CONFIG["cache_ttl"]:
                 cleaned[key] = value
         else:
-            # Old format without timestamp - keep it
             cleaned[key] = value
     return cleaned
 
@@ -106,10 +150,13 @@ def transpile_to_python(source: str, use_cache: bool = True) -> str:
     
     src_dir = Path(__file__).resolve().parent
     file_path = src_dir.parent / "key" / "raw.txt"
-    with open(file_path, "r") as file:
-        api_key = file.read().strip()
-        if not api_key:
-            raise ValueError("Please run the setup script (setup.sh) to add API key.")
+    try:
+        with open(file_path, "r") as file:
+            api_key = file.read().strip()
+            if not api_key:
+                error("API key not found. Please run setup.sh to add your API key.")
+    except FileNotFoundError:
+        error(f"API key file not found at {file_path}. Please run setup.sh.")
 
     # Check cache first
     if use_cache:
@@ -117,15 +164,11 @@ def transpile_to_python(source: str, use_cache: bool = True) -> str:
         cache = clean_old_cache_entries(cache)
         cache_key = get_cache_key(source)
         if cache_key in cache:
-            if CONFIG["verbose"]:
-                print(f"[Cache hit] Key: {cache_key[:8]}...", file=sys.stderr)
+            info("Using cached response")
             result = cache[cache_key].get("result", "") if isinstance(cache[cache_key], dict) else cache[cache_key]
-            if CONFIG["verbose"]:
-                print(f"[Cache] Retrieved cached response", file=sys.stderr)
             return result
 
-    if CONFIG["verbose"]:
-        print(f"[API] Sending request to Groq API...", file=sys.stderr)
+    info("Sending request to Groq API...")
 
     url = "https://api.groq.com/openai/v1/chat/completions"
     
@@ -161,7 +204,7 @@ def transpile_to_python(source: str, use_cache: bool = True) -> str:
         
         if response.status_code != 200:
             safe_msg = response.text.replace('"', '\\"')
-            return f'print("API Error (Status {response.status_code}): {safe_msg}")'
+            error(f"API Error (Status {response.status_code}): {safe_msg}")
             
         data = response.json()
         raw_python = data["choices"][0]["message"]["content"]
@@ -178,24 +221,27 @@ def transpile_to_python(source: str, use_cache: bool = True) -> str:
         if use_cache:
             cache = load_cache()
             cache_key = get_cache_key(source)
-            # Store with timestamp for TTL
             cache[cache_key] = {
                 "result": result,
                 "timestamp": time.time()
             }
             cache = clean_old_cache_entries(cache)
             save_cache(cache)
-            if CONFIG["verbose"]:
-                print(f"[Cache] Stored response with key: {cache_key[:8]}...", file=sys.stderr)
+            info("Response cached")
 
-        if CONFIG["verbose"]:
-            elapsed = time.time() - start_time
-            print(f"[API] Request completed in {elapsed:.2f}s", file=sys.stderr)
+        elapsed = time.time() - start_time
+        info(f"Request completed in {elapsed:.2f}s")
         
         return result
 
+    except requests.exceptions.Timeout:
+        error(f"API request timed out after {CONFIG['timeout']} seconds. Use --timeout to increase.")
+    except requests.exceptions.ConnectionError:
+        error("Failed to connect to Groq API. Check your internet connection.")
+    except requests.exceptions.RequestException as e:
+        error(f"API request failed: {str(e)}")
     except Exception as e:
-        return f'print("Error connecting to Groq API endpoint: {str(e)}")'
+        error(f"Unexpected error during transpilation: {str(e)}")
 
 
 def execute_python_code(python_code: str, env_vars: Optional[Dict[str, str]] = None) -> int:
@@ -208,44 +254,56 @@ def execute_python_code(python_code: str, env_vars: Optional[Dict[str, str]] = N
         print("="*50 + "\n")
         
         if CONFIG["dry_run"]:
-            print("[Dry run] Skipping execution.")
+            info("Dry run - skipping execution")
             return 0
     
     if CONFIG["dry_run"]:
         return 0
     
-    # Set up environment
     env = os.environ.copy()
     if env_vars:
         env.update(env_vars)
+        info(f"Environment variables set: {', '.join(env_vars.keys())}")
     
-    # Use custom interpreter if specified
     interpreter = CONFIG["interpreter"]
     
-    # Execute with or without interactive mode
     if CONFIG["interactive"]:
         cmd = [interpreter, "-i", "-c", python_code]
     else:
         cmd = [interpreter, "-c", python_code]
     
-    completed = subprocess.run(cmd, env=env)
-    return completed.returncode
+    try:
+        info("Executing Python code...")
+        completed = subprocess.run(cmd, env=env)
+        if completed.returncode == 0:
+            success("Execution completed successfully.")
+        else:
+            warn(f"Execution completed with exit code: {completed.returncode}")
+        return completed.returncode
+    except FileNotFoundError:
+        error(f"Python interpreter not found: {interpreter}")
+    except subprocess.SubprocessError as e:
+        error(f"Failed to execute Python code: {str(e)}")
 
 
 def run_shell() -> None:
     """Start an interactive shell that transpiles and executes each submitted block."""
     if not CONFIG["quiet"]:
-        print("Nova Shell\nSubmit a block, then press Enter on an empty line to run it.")
-        print("Type exit or quit to leave.")
+        print("Nova Shell")
+        print("Submit a block, then press Enter on an empty line to run it.")
+        print("Type exit or quit to leave.\n")
     
     buffer: list[str] = []
 
     while True:
         prompt = "nova> " if not buffer else "...   "
-        
+
         try:
             line = input(prompt)
         except EOFError:
+            print()
+            break
+        except KeyboardInterrupt:
             print()
             break
 
@@ -283,18 +341,18 @@ def run_settings() -> None:
         print("2. Show cache info")
         print("3. Back")
         
-        choice = input("\nSelect an option (1-3): ").strip()
+        choice = input("Select an option (1-3): ").strip()
         if choice == "1":
             clear_cache()
             break
         elif choice == "2":
             entries, size = get_cache_size()
-            print(f"\nCache contains {entries} entries ({size:,} bytes)")
+            print(f"Cache contains {entries} entries ({size:,} bytes)")
             break
         elif choice == "3":
             break
         else:
-            print("Invalid option. Please try again.")
+            warn("Invalid option. Please try again.")
 
 
 def run_single_string(code_string: str, use_cache: bool = True, env_vars: Optional[Dict[str, str]] = None) -> None:
@@ -310,8 +368,8 @@ def log_to_file(message: str, log_file: Optional[str] = None) -> None:
             with open(log_file, "a", encoding="utf-8") as f:
                 timestamp = datetime.now().isoformat()
                 f.write(f"[{timestamp}] {message}\n")
-        except IOError:
-            pass
+        except IOError as e:
+            warn(f"Failed to write to log file: {e}")
 
 
 def parse_env_vars(env_strings: list[str]) -> Dict[str, str]:
@@ -322,6 +380,8 @@ def parse_env_vars(env_strings: list[str]) -> Dict[str, str]:
             if "=" in env_str:
                 key, value = env_str.split("=", 1)
                 env_vars[key] = value
+            else:
+                warn(f"Invalid env format: {env_str} (expected KEY=value)")
     return env_vars
 
 
@@ -335,10 +395,9 @@ def save_output(python_code: str, output_path: str) -> None:
     try:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(python_code)
-        if not CONFIG["quiet"]:
-            print(f"Saved transpiled code to: {output_path}")
+        success(f"Saved transpiled code to: {output_path}")
     except IOError as e:
-        print(f"Error saving to {output_path}: {e}", file=sys.stderr)
+        error(f"Failed to save output to {output_path}: {e}")
 
 
 def show_flags() -> None:
@@ -348,6 +407,10 @@ def show_flags() -> None:
 ║                           NOVA - AVAILABLE FLAGS                             ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
+HELP OPTIONS:
+  -h, --help           Show this help message and exit
+  --flags              Display this list of all available flags with descriptions
+
 INPUT OPTIONS:
   source_file          Path to the .no file to transpile
   -s, --string TEXT    Transpile and execute a single string of code
@@ -356,7 +419,7 @@ INPUT OPTIONS:
 
 BEHAVIOR OPTIONS:
   -n, --no-cache       Disable cache for this run
-  --show-code          Show the generated Python code as well as executing it
+  --show-code          Show the generated Python code without executing it
   --dry-run            Show what would be transpiled without executing
   -v, --verbose        Show detailed output including API calls and cache info
   -q, --quiet          Suppress all non-error output
@@ -381,13 +444,9 @@ ENVIRONMENT AND EXECUTION:
 SECURITY:
   --allow-imports LIST Comma-separated list of allowed imports (not yet implemented)
 
-HELP:
-  -h, --help           Show this help message and exit
-  --flags              Display this list of all available flags with descriptions
-
 EXAMPLES:
   nova script.no                          # Run a .no file
-  nova -s "print('Hello')"                # Run a single string
+  nova -s "print('Hello')"               # Run a single string
   nova --settings                         # Open settings menu
   nova script.no -v --show-code           # Verbose mode with code preview
   nova script.no --env API_KEY=123        # With environment variables
@@ -400,7 +459,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run .no files via cloud-based AI transpilation",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        add_help=False  # We'll add our own help
+        add_help=False
     )
     
     # Help options
@@ -467,7 +526,7 @@ def main() -> None:
         "temperature": args.temperature,
         "timeout": args.timeout,
         "interpreter": args.interpreter,
-        "show_code": args.show_code or args.dry_run,  # Show code in both cases
+        "show_code": args.show_code or args.dry_run,
         "dry_run": args.dry_run,
         "interactive": args.interactive,
         "cache_ttl": args.cache_ttl,
@@ -488,8 +547,7 @@ def main() -> None:
     if args.stdin:
         source = read_from_stdin()
         if not source:
-            print("Error: No input from stdin", file=sys.stderr)
-            sys.exit(1)
+            error("No input from stdin")
         python_code = transpile_to_python(source, use_cache=not args.no_cache)
         if args.output:
             save_output(python_code, args.output)
@@ -508,24 +566,27 @@ def main() -> None:
         return
     
     if not args.source_file.endswith(".no"):
-        print("Error: Input file must have a .no extension.", file=sys.stderr)
-        sys.exit(1)
+        error(f"Input file '{args.source_file}' must have a .no extension.")
     
     target_path = os.path.abspath(args.source_file)
     try:
         with open(target_path, "r", encoding="utf-8") as handle:
             source = handle.read()
     except FileNotFoundError:
-        print(f"Error: File not found at {target_path}", file=sys.stderr)
-        sys.exit(1)
+        error(f"File not found at {target_path}")
+    except PermissionError:
+        error(f"Permission denied: Cannot read {target_path}")
+    except IOError as e:
+        error(f"Failed to read file {target_path}: {e}")
+    
+    if not source.strip():
+        error(f"File {args.source_file} is empty")
     
     python_code = transpile_to_python(source, use_cache=not args.no_cache)
     
-    # Log if requested
     if args.log_file:
         log_to_file(f"Transpiled {args.source_file} - Code length: {len(python_code)}", args.log_file)
     
-    # Save output or execute
     if args.output:
         save_output(python_code, args.output)
     else:
@@ -533,4 +594,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print()
+        if CONFIG["color"]:
+            print(f"{YELLOW}Interrupted by user{RESET}", file=sys.stderr)
+        else:
+            print("Interrupted by user", file=sys.stderr)
+        sys.exit(130)
