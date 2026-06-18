@@ -13,7 +13,7 @@ import requests
 def transpile_to_python(source: str) -> str:
     """Sends a raw HTTP POST request using an active production Groq model ID."""
     src_dir = Path(__file__).resolve().parent
-    file_path = src_dir.parent / "key" / "raw.txt
+    file_path = src_dir.parent / "key" / "raw.txt"
     with open(file_path, "r") as file:
         api_key = file.read().strip()
         if not api_key:
