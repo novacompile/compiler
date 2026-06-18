@@ -16,9 +16,22 @@ nova -s "print('Hello World')"
 
 # Open settings menu
 nova --settings
+
+# See all flags
+nova --flags
+
+# Get help
+nova --help
 ```
 
 ## Command-Line Flags
+
+### Help Options
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `-h, --help` | Show the help message and exit | `nova --help` |
+| `--flags` | Display a complete list of all available flags with descriptions | `nova --flags` |
 
 ### Input Options
 
@@ -149,6 +162,12 @@ nova script.no --log-file my_log.log
 
 # Set custom Python interpreter
 nova script.no --interpreter python3.11
+
+# Get quick help
+nova --help
+
+# List all flags
+nova --flags
 ```
 
 ## Interactive Shell Commands
