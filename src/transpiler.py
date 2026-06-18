@@ -9,7 +9,24 @@ import json
 import os
 import subprocess
 import sys
+import time
+import shlex
+from datetime import datetime
+from typing import Optional, Dict, Any
 import requests
+
+
+# Global config
+CONFIG = {
+    "cache_ttl": None,  # None means no expiration
+    "model": "openai/gpt-oss-120b",
+    "temperature": 0.1,
+    "timeout": 30,
+    "verbose": False,
+    "quiet": False,
+    "color": True,
+    "interpreter": sys.executable,
+}
 
 
 def get_cache_path() -> Path:
@@ -44,17 +61,49 @@ def clear_cache() -> None:
     cache_path = get_cache_path()
     if cache_path.exists():
         cache_path.unlink()
-    print("Cache cleared successfully.")
+    if not CONFIG["quiet"]:
+        print("Cache cleared successfully.")
+
+
+def get_cache_size() -> tuple[int, int]:
+    """Get cache size in entries and bytes."""
+    cache = load_cache()
+    size_bytes = 0
+    for key, value in cache.items():
+        if isinstance(value, dict):
+            # For cache with timestamps
+            size_bytes += len(json.dumps(value).encode('utf-8'))
+        else:
+            size_bytes += len(str(value).encode('utf-8'))
+    return len(cache), size_bytes
 
 
 def get_cache_key(prompt: str) -> str:
     """Generate a cache key from the prompt."""
-    # Use SHA-256 hash of the prompt as cache key
     return hashlib.sha256(prompt.encode('utf-8')).hexdigest()
+
+
+def clean_old_cache_entries(cache: dict) -> dict:
+    """Remove cache entries older than TTL."""
+    if CONFIG["cache_ttl"] is None:
+        return cache
+    
+    now = time.time()
+    cleaned = {}
+    for key, value in cache.items():
+        if isinstance(value, dict) and "timestamp" in value:
+            if now - value["timestamp"] <= CONFIG["cache_ttl"]:
+                cleaned[key] = value
+        else:
+            # Old format without timestamp - keep it
+            cleaned[key] = value
+    return cleaned
 
 
 def transpile_to_python(source: str, use_cache: bool = True) -> str:
     """Sends a raw HTTP POST request using an active production Groq model ID."""
+    start_time = time.time()
+    
     src_dir = Path(__file__).resolve().parent
     file_path = src_dir.parent / "key" / "raw.txt"
     with open(file_path, "r") as file:
@@ -65,9 +114,18 @@ def transpile_to_python(source: str, use_cache: bool = True) -> str:
     # Check cache first
     if use_cache:
         cache = load_cache()
+        cache = clean_old_cache_entries(cache)
         cache_key = get_cache_key(source)
         if cache_key in cache:
-            return cache[cache_key]
+            if CONFIG["verbose"]:
+                print(f"[Cache hit] Key: {cache_key[:8]}...", file=sys.stderr)
+            result = cache[cache_key].get("result", "") if isinstance(cache[cache_key], dict) else cache[cache_key]
+            if CONFIG["verbose"]:
+                print(f"[Cache] Retrieved cached response", file=sys.stderr)
+            return result
+
+    if CONFIG["verbose"]:
+        print(f"[API] Sending request to Groq API...", file=sys.stderr)
 
     url = "https://api.groq.com/openai/v1/chat/completions"
     
@@ -90,16 +148,16 @@ def transpile_to_python(source: str, use_cache: bool = True) -> str:
     )
 
     payload = {
-        "model": "openai/gpt-oss-120b",
+        "model": CONFIG["model"],
         "messages": [
             {"role": "system", "content": system_instruction},
             {"role": "user", "content": source}
         ],
-        "temperature": 0.1
+        "temperature": CONFIG["temperature"]
     }
 
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        response = requests.post(url, headers=headers, json=payload, timeout=CONFIG["timeout"])
         
         if response.status_code != 200:
             safe_msg = response.text.replace('"', '\\"')
@@ -120,31 +178,71 @@ def transpile_to_python(source: str, use_cache: bool = True) -> str:
         if use_cache:
             cache = load_cache()
             cache_key = get_cache_key(source)
-            cache[cache_key] = result
+            # Store with timestamp for TTL
+            cache[cache_key] = {
+                "result": result,
+                "timestamp": time.time()
+            }
+            cache = clean_old_cache_entries(cache)
             save_cache(cache)
+            if CONFIG["verbose"]:
+                print(f"[Cache] Stored response with key: {cache_key[:8]}...", file=sys.stderr)
 
+        if CONFIG["verbose"]:
+            elapsed = time.time() - start_time
+            print(f"[API] Request completed in {elapsed:.2f}s", file=sys.stderr)
+        
         return result
 
     except Exception as e:
         return f'print("Error connecting to Groq API endpoint: {str(e)}")'
 
 
-def execute_python_code(python_code: str) -> int:
+def execute_python_code(python_code: str, env_vars: Optional[Dict[str, str]] = None) -> int:
     """Run generated Python code in a fresh interpreter process."""
-    completed = subprocess.run([sys.executable, "-c", python_code])
+    if CONFIG["show_code"]:
+        print("\n" + "="*50)
+        print("Generated Python Code:")
+        print("="*50)
+        print(python_code)
+        print("="*50 + "\n")
+        
+        if CONFIG["dry_run"]:
+            print("[Dry run] Skipping execution.")
+            return 0
+    
+    if CONFIG["dry_run"]:
+        return 0
+    
+    # Set up environment
+    env = os.environ.copy()
+    if env_vars:
+        env.update(env_vars)
+    
+    # Use custom interpreter if specified
+    interpreter = CONFIG["interpreter"]
+    
+    # Execute with or without interactive mode
+    if CONFIG["interactive"]:
+        cmd = [interpreter, "-i", "-c", python_code]
+    else:
+        cmd = [interpreter, "-c", python_code]
+    
+    completed = subprocess.run(cmd, env=env)
     return completed.returncode
 
 
 def run_shell() -> None:
     """Start an interactive shell that transpiles and executes each submitted block."""
-    print("Nova Shell\nSubmit a block, then press Enter on an empty line to run it.")
-    print("Type exit or quit to leave.")
-
+    if not CONFIG["quiet"]:
+        print("Nova Shell\nSubmit a block, then press Enter on an empty line to run it.")
+        print("Type exit or quit to leave.")
+    
     buffer: list[str] = []
 
     while True:
         prompt = "nova> " if not buffer else "...   "
-
+        
         try:
             line = input(prompt)
         except EOFError:
@@ -175,57 +273,244 @@ def run_shell() -> None:
 
 def run_settings() -> None:
     """Open the settings menu."""
-    print("Settings")
-    print("========")
-    print("1. Clear cache")
-    print("2. Back")
+    if CONFIG["quiet"]:
+        return
     
     while True:
-        choice = input("\nSelect an option (1-2): ").strip()
+        print("\nSettings")
+        print("========")
+        print("1. Clear cache")
+        print("2. Show cache info")
+        print("3. Back")
+        
+        choice = input("\nSelect an option (1-3): ").strip()
         if choice == "1":
             clear_cache()
             break
         elif choice == "2":
+            entries, size = get_cache_size()
+            print(f"\nCache contains {entries} entries ({size:,} bytes)")
+            break
+        elif choice == "3":
             break
         else:
             print("Invalid option. Please try again.")
 
 
-def run_single_string(code_string: str, use_cache: bool = True) -> None:
+def run_single_string(code_string: str, use_cache: bool = True, env_vars: Optional[Dict[str, str]] = None) -> None:
     """Transpile and execute a single string of code."""
     python_code = transpile_to_python(code_string, use_cache=use_cache)
-    execute_python_code(python_code)
+    execute_python_code(python_code, env_vars=env_vars)
+
+
+def log_to_file(message: str, log_file: Optional[str] = None) -> None:
+    """Log a message to a file if logging is enabled."""
+    if log_file:
+        try:
+            with open(log_file, "a", encoding="utf-8") as f:
+                timestamp = datetime.now().isoformat()
+                f.write(f"[{timestamp}] {message}\n")
+        except IOError:
+            pass
+
+
+def parse_env_vars(env_strings: list[str]) -> Dict[str, str]:
+    """Parse environment variables from a list of KEY=value strings."""
+    env_vars = {}
+    if env_strings:
+        for env_str in env_strings:
+            if "=" in env_str:
+                key, value = env_str.split("=", 1)
+                env_vars[key] = value
+    return env_vars
+
+
+def read_from_stdin() -> str:
+    """Read input from stdin."""
+    return sys.stdin.read().strip()
+
+
+def save_output(python_code: str, output_path: str) -> None:
+    """Save the transpiled code to a file."""
+    try:
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(python_code)
+        if not CONFIG["quiet"]:
+            print(f"Saved transpiled code to: {output_path}")
+    except IOError as e:
+        print(f"Error saving to {output_path}: {e}", file=sys.stderr)
+
+
+def show_flags() -> None:
+    """Display a list of all available flags with descriptions."""
+    flags_info = """
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                           NOVA - AVAILABLE FLAGS                             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+INPUT OPTIONS:
+  source_file          Path to the .no file to transpile
+  -s, --string TEXT    Transpile and execute a single string of code
+  --stdin              Read input from stdin instead of a file
+  -o, --output FILE    Save generated code to a file instead of executing
+
+BEHAVIOR OPTIONS:
+  -n, --no-cache       Disable cache for this run
+  --show-code          Show the generated Python code without executing it
+  --dry-run            Show what would be transpiled without executing
+  -v, --verbose        Show detailed output including API calls and cache info
+  -q, --quiet          Suppress all non-error output
+  --no-color           Disable colored output in terminal
+  -i, --interactive    Drop into interactive mode after execution (like python -i)
+
+MODEL AND PERFORMANCE:
+  --model MODEL        Groq model to use (default: openai/gpt-oss-120b)
+  -t, --temperature FLOAT Temperature for the AI model (0.0-1.0, default: 0.1)
+  --timeout SECONDS    API timeout in seconds (default: 30)
+
+CACHE MANAGEMENT:
+  --cache-size         Show size and number of entries in cache
+  --cache-ttl SECONDS  Set cache expiration time in seconds (auto-clear old entries)
+  --settings           Open interactive settings menu
+
+ENVIRONMENT AND EXECUTION:
+  --env KEY=value      Set environment variables (can be used multiple times)
+  --interpreter PATH   Python interpreter to use for execution
+  --log-file FILE      Log all transpilations and execution results to a file
+
+SECURITY:
+  --allow-imports LIST Comma-separated list of allowed imports (not yet implemented)
+
+HELP:
+  -h, --help           Show this help message and exit
+  --flags              Display this list of all available flags with descriptions
+
+EXAMPLES:
+  nova script.no                          # Run a .no file
+  nova -s "print('Hello')"               # Run a single string
+  nova --settings                         # Open settings menu
+  nova script.no -v --show-code           # Verbose mode with code preview
+  nova script.no --env API_KEY=123        # With environment variables
+  echo "print('hi')" | nova --stdin       # Pipe input from stdin
+"""
+    print(flags_info)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run .no files via cloud-based AI transpilation"
+        description="Run .no files via cloud-based AI transpilation",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        add_help=False  # We'll add our own help
     )
+    
+    # Help options
+    parser.add_argument("-h", "--help", action="store_true", help="Show this help message and exit")
+    parser.add_argument("--flags", action="store_true", help="Display list of all available flags with descriptions")
+    
+    # Input options
     parser.add_argument("source_file", nargs="?", help="Path to the .no file")
-    parser.add_argument("--settings", action="store_true", help="Open settings menu")
     parser.add_argument("-s", "--string", type=str, help="Transpile and execute a single string of code")
+    parser.add_argument("--stdin", action="store_true", help="Read input from stdin instead of a file")
+    parser.add_argument("-o", "--output", type=str, help="Save generated code to a specific file instead of executing")
+    
+    # Behavior options
     parser.add_argument("-n", "--no-cache", action="store_true", help="Disable cache for this run")
+    parser.add_argument("--show-code", action="store_true", help="Show the generated Python code without executing it")
+    parser.add_argument("--dry-run", action="store_true", help="Show what would be transpiled without executing")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Show detailed output including API calls and cache info")
+    parser.add_argument("-q", "--quiet", action="store_true", help="Suppress all non-error output")
+    parser.add_argument("--no-color", action="store_true", help="Disable colored output")
+    parser.add_argument("-i", "--interactive", action="store_true", help="Drop into interactive mode after execution (like python -i)")
+    
+    # Model and performance
+    parser.add_argument("--model", type=str, default="openai/gpt-oss-120b", 
+                       help="Groq model to use (default: openai/gpt-oss-120b)")
+    parser.add_argument("-t", "--temperature", type=float, default=0.1, 
+                       help="Temperature for the AI model (0.0-1.0, default: 0.1)")
+    parser.add_argument("--timeout", type=int, default=30, 
+                       help="API timeout in seconds (default: 30)")
+    
+    # Cache management
+    parser.add_argument("--cache-size", action="store_true", help="Show size and number of entries in cache")
+    parser.add_argument("--cache-ttl", type=int, help="Cache expiration time in seconds (auto-clear old entries)")
+    parser.add_argument("--settings", action="store_true", help="Open settings menu")
+    
+    # Environment and execution
+    parser.add_argument("--env", action="append", help="Set environment variables (KEY=value format, can be used multiple times)")
+    parser.add_argument("--interpreter", type=str, default=sys.executable, 
+                       help="Python interpreter to use for execution")
+    
+    # Logging
+    parser.add_argument("--log-file", type=str, help="Log all transpilations and execution results to a file")
+    
+    # Security
+    parser.add_argument("--allow-imports", type=str, help="Comma-separated list of allowed imports (not implemented yet)")
+    
     args = parser.parse_args()
-
+    
+    # Handle help and flags
+    if args.help:
+        parser.print_help()
+        print("\nFor a complete list of all available flags with descriptions, use: nova --flags")
+        return
+    
+    if args.flags:
+        show_flags()
+        return
+    
+    # Update global config
+    CONFIG.update({
+        "verbose": args.verbose,
+        "quiet": args.quiet,
+        "color": not args.no_color,
+        "model": args.model,
+        "temperature": args.temperature,
+        "timeout": args.timeout,
+        "interpreter": args.interpreter,
+        "show_code": args.show_code or args.dry_run,  # Show code in both cases
+        "dry_run": args.dry_run,
+        "interactive": args.interactive,
+        "cache_ttl": args.cache_ttl,
+    })
+    
+    # Handle cache size display
+    if args.cache_size:
+        entries, size = get_cache_size()
+        print(f"Cache contains {entries} entries ({size:,} bytes)")
+        return
+    
     # Handle settings
     if args.settings:
         run_settings()
         return
-
+    
+    # Handle stdin
+    if args.stdin:
+        source = read_from_stdin()
+        if not source:
+            print("Error: No input from stdin", file=sys.stderr)
+            sys.exit(1)
+        python_code = transpile_to_python(source, use_cache=not args.no_cache)
+        if args.output:
+            save_output(python_code, args.output)
+        else:
+            execute_python_code(python_code, env_vars=parse_env_vars(args.env))
+        return
+    
     # Handle single string execution
     if args.string is not None:
-        run_single_string(args.string, use_cache=not args.no_cache)
+        run_single_string(args.string, use_cache=not args.no_cache, env_vars=parse_env_vars(args.env))
         return
-
+    
     # Handle file execution
     if args.source_file is None:
         run_shell()
         return
-
+    
     if not args.source_file.endswith(".no"):
         print("Error: Input file must have a .no extension.", file=sys.stderr)
         sys.exit(1)
-
+    
     target_path = os.path.abspath(args.source_file)
     try:
         with open(target_path, "r", encoding="utf-8") as handle:
@@ -233,9 +518,18 @@ def main() -> None:
     except FileNotFoundError:
         print(f"Error: File not found at {target_path}", file=sys.stderr)
         sys.exit(1)
-
+    
     python_code = transpile_to_python(source, use_cache=not args.no_cache)
-    execute_python_code(python_code)
+    
+    # Log if requested
+    if args.log_file:
+        log_to_file(f"Transpiled {args.source_file} - Code length: {len(python_code)}", args.log_file)
+    
+    # Save output or execute
+    if args.output:
+        save_output(python_code, args.output)
+    else:
+        execute_python_code(python_code, env_vars=parse_env_vars(args.env))
 
 
 if __name__ == "__main__":
