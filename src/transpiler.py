@@ -4,13 +4,56 @@ from __future__ import annotations
 from pathlib import Path
 
 import argparse
+import hashlib
+import json
 import os
 import subprocess
 import sys
 import requests
 
 
-def transpile_to_python(source: str) -> str:
+def get_cache_path() -> Path:
+    """Get the path to the cache file."""
+    src_dir = Path(__file__).resolve().parent
+    cache_dir = src_dir.parent / "cache"
+    cache_dir.mkdir(exist_ok=True)
+    return cache_dir / "cache.json"
+
+
+def load_cache() -> dict:
+    """Load the cache from disk."""
+    cache_path = get_cache_path()
+    if cache_path.exists():
+        try:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            return {}
+    return {}
+
+
+def save_cache(cache: dict) -> None:
+    """Save the cache to disk."""
+    cache_path = get_cache_path()
+    with open(cache_path, "w", encoding="utf-8") as f:
+        json.dump(cache, f, indent=2)
+
+
+def clear_cache() -> None:
+    """Clear the entire cache."""
+    cache_path = get_cache_path()
+    if cache_path.exists():
+        cache_path.unlink()
+    print("Cache cleared successfully.")
+
+
+def get_cache_key(prompt: str) -> str:
+    """Generate a cache key from the prompt."""
+    # Use SHA-256 hash of the prompt as cache key
+    return hashlib.sha256(prompt.encode('utf-8')).hexdigest()
+
+
+def transpile_to_python(source: str, use_cache: bool = True) -> str:
     """Sends a raw HTTP POST request using an active production Groq model ID."""
     src_dir = Path(__file__).resolve().parent
     file_path = src_dir.parent / "key" / "raw.txt"
@@ -18,6 +61,13 @@ def transpile_to_python(source: str) -> str:
         api_key = file.read().strip()
         if not api_key:
             raise ValueError("Please run the setup script (setup.sh) to add API key.")
+
+    # Check cache first
+    if use_cache:
+        cache = load_cache()
+        cache_key = get_cache_key(source)
+        if cache_key in cache:
+            return cache[cache_key]
 
     url = "https://api.groq.com/openai/v1/chat/completions"
     
@@ -63,8 +113,17 @@ def transpile_to_python(source: str) -> str:
             if not line.strip().startswith("```"):
                 clean_lines.append(line)
         raw_python = "\n".join(clean_lines)
-            
-        return raw_python.strip()
+        
+        result = raw_python.strip()
+
+        # Store in cache
+        if use_cache:
+            cache = load_cache()
+            cache_key = get_cache_key(source)
+            cache[cache_key] = result
+            save_cache(cache)
+
+        return result
 
     except Exception as e:
         return f'print("Error connecting to Groq API endpoint: {str(e)}")'
@@ -114,13 +173,51 @@ def run_shell() -> None:
         buffer.append(line)
 
 
+def run_settings() -> None:
+    """Open the settings menu."""
+    print("Settings")
+    print("========")
+    print("1. Clear cache")
+    print("2. Back")
+    
+    while True:
+        choice = input("\nSelect an option (1-2): ").strip()
+        if choice == "1":
+            clear_cache()
+            break
+        elif choice == "2":
+            break
+        else:
+            print("Invalid option. Please try again.")
+
+
+def run_single_string(code_string: str, use_cache: bool = True) -> None:
+    """Transpile and execute a single string of code."""
+    python_code = transpile_to_python(code_string, use_cache=use_cache)
+    execute_python_code(python_code)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run .no files via cloud-based AI transpilation"
     )
     parser.add_argument("source_file", nargs="?", help="Path to the .no file")
+    parser.add_argument("--settings", action="store_true", help="Open settings menu")
+    parser.add_argument("-s", "--string", type=str, help="Transpile and execute a single string of code")
+    parser.add_argument("-n", "--no-cache", action="store_true", help="Disable cache for this run")
     args = parser.parse_args()
 
+    # Handle settings
+    if args.settings:
+        run_settings()
+        return
+
+    # Handle single string execution
+    if args.string is not None:
+        run_single_string(args.string, use_cache=not args.no_cache)
+        return
+
+    # Handle file execution
     if args.source_file is None:
         run_shell()
         return
@@ -137,7 +234,7 @@ def main() -> None:
         print(f"Error: File not found at {target_path}", file=sys.stderr)
         sys.exit(1)
 
-    python_code = transpile_to_python(source)
+    python_code = transpile_to_python(source, use_cache=not args.no_cache)
     execute_python_code(python_code)
 
 
