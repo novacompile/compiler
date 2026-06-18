@@ -356,7 +356,7 @@ INPUT OPTIONS:
 
 BEHAVIOR OPTIONS:
   -n, --no-cache       Disable cache for this run
-  --show-code          Show the generated Python code without executing it
+  --show-code          Show the generated Python code as well as executing it
   --dry-run            Show what would be transpiled without executing
   -v, --verbose        Show detailed output including API calls and cache info
   -q, --quiet          Suppress all non-error output
