@@ -47,7 +47,7 @@ nova --help
 | Flag | Description | Example |
 |------|-------------|---------|
 | `-n, --no-cache` | Disable cache for this run | `nova script.no -n` |
-| `--show-code` | Show the generated Python code without executing it | `nova script.no --show-code` |
+| `--show-code` | Show the generated Python code as well as executing it | `nova script.no --show-code` |
 | `--dry-run` | Show what would be transpiled without executing | `nova script.no --dry-run` |
 | `-v, --verbose` | Show detailed output including API calls and cache info | `nova -s "print('hi')" -v` |
 | `-q, --quiet` | Suppress all non-error output | `nova script.no -q` |
