@@ -290,13 +290,18 @@ def run_shell() -> None:
     """Start an interactive shell that transpiles and executes each submitted block."""
     if not CONFIG["quiet"]:
         print("Nova Shell")
-        print("Submit a block, then press Enter on an empty line to run it.")
-        print("Type exit or quit to leave.\n")
+        print("Type your code and press Enter to run it.")
+        print("Use '\\' at the end of a line for multi-line input.")
+        print("Type 'exit' or 'quit' to leave.\n")
     
     buffer: list[str] = []
+    in_multiline = False
 
     while True:
-        prompt = "nova> " if not buffer else "...   "
+        if in_multiline:
+            prompt = "...   "
+        else:
+            prompt = "nova> "
 
         try:
             line = input(prompt)
@@ -305,28 +310,48 @@ def run_shell() -> None:
             break
         except KeyboardInterrupt:
             print()
-            break
+            if buffer:
+                buffer.clear()
+                in_multiline = False
+                warn("Cancelled multi-line input")
+            else:
+                break
+            continue
 
         stripped = line.strip()
 
-        if not buffer and stripped in {"exit", "quit", ":q", ":quit", ":exit", "leave"}:
+        # Check for exit commands
+        if not buffer and not in_multiline and stripped in {"exit", "quit", ":q", ":quit", ":exit", "leave"}:
             break
 
-        if not stripped:
-            if not buffer:
-                continue
-
+        # Check if we're in multi-line mode or the line ends with \
+        if line.endswith('\\'):
+            # Remove the trailing \ and add to buffer
+            buffer.append(line[:-1])
+            in_multiline = True
+            continue
+        
+        # If we have a buffer, add this line and execute
+        if buffer:
+            buffer.append(line)
             source = "\n".join(buffer).strip()
             buffer.clear()
-
+            in_multiline = False
+            
             if not source:
                 continue
-
+                
             python_code = transpile_to_python(source)
             execute_python_code(python_code)
             continue
-
-        buffer.append(line)
+        
+        # Single line execution
+        if not stripped:
+            continue
+            
+        # Execute single line directly
+        python_code = transpile_to_python(stripped)
+        execute_python_code(python_code)
 
 
 def run_settings() -> None:
