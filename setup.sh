@@ -23,7 +23,7 @@ else
 fi
 
 echo -e "${CYAN}Installing dependencies...${NC}"
-if pip install -r requirements.txt -q; then
+if pip install -r requirements.txt -qq; then
   echo -e "${GREEN}Installed dependencies ✓${NC}"
 else
   echo -e "${RED}ERROR: Package installation failed. Please check your internet connection or requirements.txt file.${NC}"
