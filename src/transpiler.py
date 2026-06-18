@@ -387,7 +387,7 @@ HELP:
 
 EXAMPLES:
   nova script.no                          # Run a .no file
-  nova -s "print('Hello')"               # Run a single string
+  nova -s "print('Hello')"                # Run a single string
   nova --settings                         # Open settings menu
   nova script.no -v --show-code           # Verbose mode with code preview
   nova script.no --env API_KEY=123        # With environment variables
