@@ -1,4 +1,4 @@
-Nova - v2.3.0
+Nova - v2.3.1
 
 NovaCompile is an AI-powered runtime engine and transpiler designed to execute 
 unstructured text, pseudo-code, and custom language files (.no) by instantly 
