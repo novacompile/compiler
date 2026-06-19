@@ -50,6 +50,14 @@ def get_memory_path() -> Path:
     return memory_dir / "chat-memory.db"
 
 
+def get_backup_path() -> Path:
+    """Get the path to the backup directory in ~/.novacompile/compiler/backups/"""
+    home_dir = Path.home()
+    backup_dir = home_dir / ".novacompile" / "compiler" / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    return backup_dir
+
+
 class Memory:
     """Manages persistent memory for the AI using SQLite."""
     
@@ -135,6 +143,17 @@ class Memory:
 
 # Global memory instance
 memory = Memory()
+
+
+def format_bold_text(text: str) -> str:
+    """Convert **text** to ANSI bold format."""
+    if not CONFIG["color"]:
+        # If color is disabled, just remove the ** markers
+        return re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+    
+    # Replace **text** with bold ANSI codes
+    pattern = r'\*\*(.*?)\*\*'
+    return re.sub(pattern, f'{BOLD}\\1{RESET}', text)
 
 
 def error(msg: str) -> None:
@@ -319,8 +338,12 @@ def edit_file(filepath: str, new_content: str) -> bool:
     except ValueError:
         return False  # File is outside current directory
     
-    # Create backup
-    backup_path = target_path.with_suffix(target_path.suffix + '.bak')
+    # Create backup in ~/.novacompile/compiler/backups/
+    backup_dir = get_backup_path()
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_filename = f"{target_path.name}.{timestamp}.bak"
+    backup_path = backup_dir / backup_filename
+    
     if target_path.exists():
         try:
             # Read the original content
@@ -330,6 +353,7 @@ def edit_file(filepath: str, new_content: str) -> bool:
             # Write backup
             with open(backup_path, 'w', encoding='utf-8') as f:
                 f.write(original_content)
+            verbose_print(f"Backup created: {backup_path}")
         except:
             return False
     
@@ -340,15 +364,6 @@ def edit_file(filepath: str, new_content: str) -> bool:
             f.write(new_content)
         return True
     except:
-        # Restore backup if write fails
-        if backup_path.exists():
-            try:
-                with open(backup_path, 'r', encoding='utf-8') as f:
-                    backup_content = f.read()
-                with open(target_path, 'w', encoding='utf-8') as f:
-                    f.write(backup_content)
-            except:
-                pass
         return False
 
 
@@ -707,6 +722,7 @@ def run_chat() -> None:
         print(f"{BOLD}{CYAN}NOVA CODING AGENT{RESET}")
         print(f"{CYAN}Your AI-powered development assistant by NovaCompile.{RESET}")
         print(f"{CYAN}Memory stored in: ~/.novacompile/compiler/memory/chat-memory.db{RESET}")
+        print(f"{CYAN}Backups stored in: ~/.novacompile/compiler/backups/{RESET}")
         print(f"{CYAN}Special commands:{RESET}")
         print(f"{CYAN}  ;edit - Grant permission to edit files{RESET}")
         print(f"{CYAN}  ;share - Share all file information with Nova{RESET}")
@@ -717,6 +733,7 @@ def run_chat() -> None:
         print("NOVA CODING AGENT")
         print("Your AI-powered development assistant by NovaCompile.")
         print("Memory stored in: ~/.novacompile/compiler/memory/chat-memory.db")
+        print("Backups stored in: ~/.novacompile/compiler/backups/")
         print("Special commands:")
         print("  ;edit - Grant permission to edit files")
         print("  ;share - Share all file information with Nova")
@@ -757,11 +774,12 @@ def run_chat() -> None:
 
         # Check for exit commands
         if stripped in {"exit", "quit", ":q", ":quit", ":exit", "leave"}:
-            if CONFIG["color"]:
-                print(f"{CYAN}Goodbye! Memory saved to ~/.novacompile/compiler/memory/chat-memory.db{RESET}")
-            else:
-                print("Goodbye! Memory saved to ~/.novacompile/compiler/memory/chat-memory.db")
             memory.close()
+            verbose_print("Memory saved to ~/.novacompile/compiler/memory/chat-memory.db")
+            if CONFIG["color"]:
+                print(f"{CYAN}Goodbye!{RESET}")
+            else:
+                print("Goodbye!")
             break
 
         # Check for memory clear
@@ -782,7 +800,10 @@ def run_chat() -> None:
         response, chat_history, permission_granted = chat_with_ai(
             stripped, chat_history, permission_granted
         )
-        print(response)
+        
+        # Format bold text in the response
+        formatted_response = format_bold_text(response)
+        print(formatted_response)
         print()  # Add blank line for readability
 
 
