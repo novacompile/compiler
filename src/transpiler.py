@@ -296,13 +296,13 @@ def execute_python_code(python_code: str, env_vars: Optional[Dict[str, str]] = N
 def run_shell() -> None:
     """Start an interactive shell that transpiles and executes each submitted block."""
     if CONFIG["color"]:
-        print(f"{BOLD}{CYAN}NOVA INTERACTIVE SHELL{RESET}")
+        print(f"{BOLD}{CYAN}NOVA SHELL{RESET}")
         print(f"{CYAN}Type your code and press Enter to run it.{RESET}")
         print(f"{CYAN}Use '\\' at the end of a line for multi-line input.{RESET}")
         print(f"{CYAN}Type 'exit' or 'quit' to leave.{RESET}")
         print(f"{CYAN}Type ':settings' to open the settings menu.{RESET}\n")
     else:
-        print("Nova Interactive Shell")
+        print("Nova Shell")
         print("Type your code and press Enter to run it.")
         print("Use '\\' at the end of a line for multi-line input.")
         print("Type 'exit' or 'quit' to leave.")
