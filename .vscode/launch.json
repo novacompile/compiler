@@ -1,0 +1,86 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Nova: Run .no file",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/transpiler.py",
+            "args": ["${file}"],
+            "console": "integratedTerminal",
+            "python": "${command:python.interpreterPath}"
+        },
+        {
+            "name": "Nova: Run with verbose",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/transpiler.py",
+            "args": ["-v", "${file}"],
+            "console": "integratedTerminal",
+            "python": "${command:python.interpreterPath}"
+        },
+        {
+            "name": "Nova: Start Shell",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/transpiler.py",
+            "args": [],
+            "console": "integratedTerminal",
+            "python": "${command:python.interpreterPath}"
+        },
+        {
+            "name": "Nova: Chat Mode",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/transpiler.py",
+            "args": ["--chat"],
+            "console": "integratedTerminal",
+            "python": "${command:python.interpreterPath}"
+        },
+        {
+            "name": "Nova: Chat Mode (Verbose)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/transpiler.py",
+            "args": ["--chat", "-v"],
+            "console": "integratedTerminal",
+            "python": "${command:python.interpreterPath}"
+        },
+        {
+            "name": "Nova: Agent Mode",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/transpiler.py",
+            "args": ["--agent"],
+            "console": "integratedTerminal",
+            "python": "${command:python.interpreterPath}"
+        },
+        {
+            "name": "Nova: Fix File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/transpiler.py",
+            "args": ["-f", "${file}"],
+            "console": "integratedTerminal",
+            "python": "${command:python.interpreterPath}"
+        },
+        {
+            "name": "Nova: Fix File with Language",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/transpiler.py",
+            "args": ["-f", "${file}", "-L", "python"],
+            "console": "integratedTerminal",
+            "python": "${command:python.interpreterPath}"
+        },
+        {
+            "name": "Nova: Run Single String",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/src/transpiler.py",
+            "args": ["-s", "print('Hello World')"],
+            "console": "integratedTerminal",
+            "python": "${command:python.interpreterPath}"
+        }
+    ]
+}
