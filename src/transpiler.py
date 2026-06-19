@@ -1,4 +1,4 @@
-"""AI transpiler and executor for .no files using Groq Cloud."""
+# Nova AI - v2.3.0
 
 from __future__ import annotations
 from pathlib import Path
@@ -627,6 +627,130 @@ def debug_file(filepath: str) -> str:
             return f"Error debugging: {str(e)}"
     else:
         return f"Debugging not supported for '{ext}' files"
+
+
+def fix_file(filepath: str, language: Optional[str] = None) -> str:
+    """Fix a file by scanning and replacing with corrected code."""
+    current_dir = Path.cwd().resolve()
+    target_path = Path(filepath).resolve()
+    
+    # Check if the file is within the current directory
+    try:
+        target_path.relative_to(current_dir)
+    except ValueError:
+        return "Error: File outside current directory"
+    
+    if not target_path.exists():
+        return f"Error: File '{filepath}' not found"
+    
+    # Read the file content
+    try:
+        with open(target_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except Exception as e:
+        return f"Error reading file: {str(e)}"
+    
+    # Determine language if not specified
+    if language is None:
+        # Try to detect from extension
+        ext = target_path.suffix.lower()
+        lang_map = {
+            '.py': 'python',
+            '.js': 'javascript',
+            '.ts': 'typescript',
+            '.rb': 'ruby',
+            '.go': 'go',
+            '.rs': 'rust',
+            '.c': 'c',
+            '.cpp': 'cpp',
+            '.java': 'java',
+            '.sh': 'bash',
+            '.bash': 'bash',
+            '.pl': 'perl',
+            '.lua': 'lua',
+            '.r': 'r',
+            '.swift': 'swift',
+            '.php': 'php',
+            '.html': 'html',
+            '.css': 'css',
+            '.json': 'json',
+            '.xml': 'xml',
+            '.yml': 'yaml',
+            '.yaml': 'yaml',
+            '.md': 'markdown',
+            '.txt': 'text'
+        }
+        language = lang_map.get(ext, 'python')  # Default to python if unknown
+    
+    # Get API key
+    api_key = get_api_key()
+    
+    # Prepare the fix request
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    system_instruction = (
+        f"You are an expert code fixer. Analyze the provided {language} code, "
+        f"identify all errors, bugs, syntax issues, and logical problems, "
+        f"and rewrite it into a fully corrected, functional version.\n\n"
+        f"Ensure the code maintains its original intent and functionality "
+        f"while fixing all issues. Do not change the code's purpose or "
+        f"remove features. Just fix what's broken.\n\n"
+        f"Output ONLY the corrected code. No explanations, no markdown formatting, "
+        f"no code block markers (like ```{language}), just the raw code."
+    )
+    
+    payload = {
+        "model": CONFIG["model"],
+        "messages": [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": f"Fix this {language} code:\n\n{content}"}
+        ],
+        "temperature": 0.1
+    }
+    
+    try:
+        info(f"Fixing {filepath} (language: {language})...")
+        response = requests.post(url, headers=headers, json=payload, timeout=CONFIG["timeout"])
+        
+        if response.status_code != 200:
+            return f"API Error (Status {response.status_code}): {response.text}"
+        
+        data = response.json()
+        fixed_code = data["choices"][0]["message"]["content"]
+        
+        # Clean up any markdown formatting
+        lines = fixed_code.splitlines()
+        clean_lines = []
+        in_code_block = False
+        for line in lines:
+            if line.strip().startswith("```"):
+                in_code_block = not in_code_block
+                continue
+            if not in_code_block and line.strip().startswith("```"):
+                continue
+            clean_lines.append(line)
+        
+        fixed_code = "\n".join(clean_lines).strip()
+        
+        # Create backup and write fixed code
+        if edit_file(filepath, fixed_code):
+            return f"Successfully fixed {filepath}"
+        else:
+            return f"Failed to write fixed code to {filepath}"
+            
+    except requests.exceptions.Timeout:
+        return f"API request timed out after {CONFIG['timeout']} seconds"
+    except requests.exceptions.ConnectionError:
+        return "Failed to connect to Groq API. Check your internet connection."
+    except requests.exceptions.RequestException as e:
+        return f"API request failed: {str(e)}"
+    except Exception as e:
+        return f"Unexpected error: {str(e)}"
 
 
 def transpile_to_python(source: str, use_cache: bool = True) -> str:
@@ -1426,6 +1550,11 @@ MODE OPTIONS:
   --agent                  Launch Nova in agent mode (AI coding agent with tools)
   --shell                  Launch Nova in shell mode (transpile and execute code) [default]
 
+FIX OPTIONS:
+  -f, --fix FILE           Scan and fix errors in a file
+  -L, --language LANG      Specify the language of the file being fixed
+                           (default: auto-detect from extension, falls back to python)
+
 CHAT/AGENT MODE TOOLS:
   ;edit                    Grant permission to edit files
   ;all                     Grant all permissions
@@ -1484,6 +1613,9 @@ EXAMPLES:
   nova --chat                             # Start chat mode (alternative)
   nova --agent                            # Start agent mode (same as chat)
   nova -c -v                              # Start chat with verbose output
+  nova -f broken_script.py                # Fix a Python file
+  nova -f broken_script.js -L javascript  # Fix a JavaScript file
+  nova -f script.go -L go                 # Fix a Go file
   nova -s "print('Hello')"                # Run a single string
   nova --settings                         # Open settings menu
   nova script.no -v --show-code           # Verbose mode with code preview
@@ -1508,6 +1640,10 @@ def main() -> None:
     parser.add_argument("-c", "--chat", action="store_true", help="Launch Nova in chat mode (AI conversation with tools)")
     parser.add_argument("--agent", action="store_true", help="Launch Nova in agent mode (AI coding agent with tools)")
     parser.add_argument("--shell", action="store_true", help="Launch Nova in shell mode (transpile and execute code)")
+    
+    # Fix options
+    parser.add_argument("-f", "--fix", type=str, help="Scan and fix errors in a file")
+    parser.add_argument("-L", "--language", type=str, help="Specify the language of the file being fixed (auto-detect if not specified)")
     
     # Input options
     parser.add_argument("source_file", nargs="?", help="Path to the .no file")
@@ -1584,6 +1720,18 @@ def main() -> None:
     # Handle settings
     if args.settings:
         run_settings()
+        return
+    
+    # Handle fix mode
+    if args.fix:
+        result = fix_file(args.fix, args.language)
+        if CONFIG["color"]:
+            if "Successfully" in result:
+                print(f"{GREEN}{result}{RESET}")
+            else:
+                print(f"{RED}{result}{RESET}")
+        else:
+            print(result)
         return
     
     # Handle chat/agent mode - this must be checked before other input methods
