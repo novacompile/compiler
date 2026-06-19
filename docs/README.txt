@@ -1,57 +1,75 @@
-NOVA - v1.2.0
+Nova - v2.3.0
 
-Nova is an AI-powered runtime engine and transpiler designed to execute unstructured text, pseudo-code, and custom language files (.no) by instantly translating them into production-ready Python code on the fly using Groq Cloud infrastructure.
+NovaCompile is an AI-powered runtime engine and transpiler designed to execute 
+unstructured text, pseudo-code, and custom language files (.no) by instantly 
+translating them into production-ready Python code on the fly using Groq Cloud 
+infrastructure.
 
-===============================================================================
+================================================================================
 QUICK START GUIDE
-===============================================================================
+================================================================================
 
-Follow these steps to configure NovaCompile inside your local workspace or 
-web-shell environment.
+To install a permanent binary global executable, run this install script:
+install/global-executable.sh
+And ignore steps 1 and 3.
 
-1. Clone the Repository
-Run this install script to copy the code to your local device:
+Follow these three simple steps to configure NovaCompile inside your local 
+workspace or web-shell environment.
+
+Step 1: Run Installation Script
+-------------------------------------------------------------------------------
+Run this installation script to clone the repository to get Nova on your device.
+
+cd ~
+mkdir .novacompile
+cd .novacompile
 git clone https://github.com/novacompile/compiler.git
+cd compiler
 
-2. Set Up Your Environment
-NovaCompile requires a connection to the Groq Cloud API. Export your personal 
-API key into your current terminal profile:
-export GROQ_API_KEY="your-actual-groq-api-key-here"
+Step 2: Get a Groq API Key
+-------------------------------------------------------------------------------
+Go to console.groq.com and sign up for an account. Click API Keys, then create 
+API key.
 
-3. Install Dependencies
-The compiler utilizes the lightweight Python requests library to manage direct 
-network handshakes:
-pip install requests
+WARNING: Remember to copy the key and put it in a safe and secure place straight 
+away after creating it.
 
-4. Create the 'nova' Terminal Shortcut
-To run the compiler globally using the 'nova' keyword instead of the full 
-Python path, register a local workspace shortcut:
-alias nova="python $(pwd)/src/transpiler.py"
+Step 3: Setup Your Environment
+-------------------------------------------------------------------------------
+Run the setup script to install the dependencies through pip, create a permanent 
+alias, and install your API key.
 
-*Note: To make this shortcut permanent across terminal restarts, append the 
-alias line above directly into your ~/.bashrc or ~/.zshrc configuration profile.
+bash setup.sh
 
+NOTE: To make this shortcut permanent across terminal restarts, the setup script 
+appends the alias directly into your ~/.bashrc configuration profile.
 
-===============================================================================
+================================================================================
 USAGE AND EXECUTION
-===============================================================================
+================================================================================
 
-Once configured, create a custom code file using your preferred pseudo-syntax 
-or simplified structures.
+Once configured, create a custom code file using your preferred pseudo-syntax or 
+simplified structures.
 
 1. Start the Interactive Shell
+-------------------------------------------------------------------------------
 Launch the shell directly to type Nova code interactively:
+
 nova
 
-* Note: Running the transpiler without a file argument starts this shell 
-  automatically. Type your Nova code block, then press Enter on an empty line 
-  to transpile and run it. Use 'exit' or 'quit' to leave.
+If you run the transpiler without a file argument, it starts this shell 
+automatically.
 
-2. Create a Nova File (script.no)
-Create a file named script.no containing your custom logic:
+In shell mode, type a block of Nova code, then press Enter on an empty line to 
+transpile and run it. Use exit or quit to leave.
+
+2. Create a Nova File
+-------------------------------------------------------------------------------
+Create a file with the .no suffix (e.g. script.no) containing your custom logic, 
+for example:
 
 // Define some basic variables
-username make "john"
+username is "john"
 counter is 5
 
 // Run a structural loop
@@ -61,16 +79,21 @@ loop 3 times
     print "Current count value is: " + counter
 
 3. Run the Compiler
-Execute the file instantly by calling 'nova' followed by your script target:
-nova script.no
+-------------------------------------------------------------------------------
+Execute the file instantly by calling nova followed by your custom script target:
 
-Alternatively, you can run the entrypoint directly:
-python src/transpiler.py script.no
+nova [filename].no
 
+If you prefer to run the entrypoint directly, this also works:
 
-===============================================================================
+python src/transpiler.py [filename].no
+
+WARNING: To be able to run the entrypoint directly, you must be inside the root 
+directory of compiler (by default it is ~/.novacompile/compiler)
+
+================================================================================
 LICENSE
-===============================================================================
+================================================================================
 
-Nova compile is under the MIT License. Before you fork this repo, read the 
-license first.
+Nova Compiler is under the MIT License (LICENSE). Make sure that you have read 
+and understood it before reproducing this repo.
