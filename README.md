@@ -1,7 +1,7 @@
 <div align="center">
   <img src="static/logo.png" width="200px" height="200px" />
   <br /><br />
-  <h1>Nova - <span id="version">v1.2.1</span></h1>
+  <h1>Nova - <span id="version">v2.3.0</span></h1>
   <div>
     <a href="https://github.com/novacompile/compiler/issues"><img alt="GitHub Issues Badge" src="https://img.shields.io/github/issues/novacompile/compiler?style=for-the-badge&link=https%3A%2F%2Fgithub.com%2Fnovacompile%2Fcompiler%2Fissues"></a>
     <a href="https://github.com/novacompile/compiler/releases"><img alt="Version Badge" src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fnovacompile%2Fcompiler%2Frefs%2Fheads%2Fmain%2F.shields%2Fversion.json&style=for-the-badge&cacheSeconds=300&link=https%3A%2F%2Fgithub.com%2Fnovacompile%2Fcompiler%2Freleases"></a>
