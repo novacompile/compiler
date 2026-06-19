@@ -42,11 +42,19 @@ CONFIG = {
 }
 
 
+def get_memory_path() -> Path:
+    """Get the path to the memory database in ~/.novacompile/compiler/memory/"""
+    home_dir = Path.home()
+    memory_dir = home_dir / ".novacompile" / "compiler" / "memory"
+    memory_dir.mkdir(parents=True, exist_ok=True)
+    return memory_dir / "chat-memory.db"
+
+
 class Memory:
     """Manages persistent memory for the AI using SQLite."""
     
-    def __init__(self, memory_file: str = "nova_memory.db"):
-        self.memory_file = memory_file
+    def __init__(self):
+        self.memory_file = str(get_memory_path())
         self.conn = None
         self._init_db()
     
@@ -168,6 +176,15 @@ def success(msg: str) -> None:
         print(f"SUCCESS: {msg}")
 
 
+def verbose_print(msg: str) -> None:
+    """Print a message only in verbose mode."""
+    if CONFIG["verbose"] and not CONFIG["quiet"]:
+        if CONFIG["color"]:
+            print(f"{CYAN}{msg}{RESET}")
+        else:
+            print(msg)
+
+
 def get_cache_path() -> Path:
     """Get the path to the cache file."""
     src_dir = Path(__file__).resolve().parent
@@ -261,9 +278,9 @@ def get_file_tree(directory: str = ".") -> str:
         
         rel_path = Path(root).relative_to(current_dir)
         if rel_path == Path('.'):
-            tree_lines.append(f"📁 ./")
+            tree_lines.append("./")
         else:
-            tree_lines.append(f"📁 {rel_path}/")
+            tree_lines.append(f"{rel_path}/")
         
         for file in sorted(files):
             if not file.startswith('.') and not file.endswith('.bak'):
@@ -271,9 +288,9 @@ def get_file_tree(directory: str = ".") -> str:
                 try:
                     size = file_path.stat().st_size
                     size_str = f"({size} bytes)" if size < 1024 else f"({size/1024:.1f} KB)"
-                    tree_lines.append(f"  📄 {file} {size_str}")
+                    tree_lines.append(f"  {file} {size_str}")
                 except:
-                    tree_lines.append(f"  📄 {file}")
+                    tree_lines.append(f"  {file}")
         
         tree_lines.append("")
     
@@ -453,10 +470,7 @@ def chat_with_ai(user_input: str, chat_history: list = None, permission_granted:
     if ';edit' in user_input.lower():
         new_permission = True
         processed_input = user_input.replace(';edit', '').strip()
-        if CONFIG["color"]:
-            print(f"{GREEN}🔓 Edit permission granted!{RESET}")
-        else:
-            print("🔓 Edit permission granted!")
+        verbose_print("Edit permission granted")
     
     # Check for ;share command
     if ';share' in user_input.lower():
@@ -465,10 +479,7 @@ def chat_with_ai(user_input: str, chat_history: list = None, permission_granted:
         share_info = f"\n\n[FILE SYSTEM INFORMATION]\n\nDirectory Structure:\n{file_tree}\n\nFile Contents:\n{all_content}"
         processed_input = processed_input.replace(';share', '').strip()
         processed_input += share_info
-        if CONFIG["color"]:
-            print(f"{CYAN}📂 Shared all file information with Nova{RESET}")
-        else:
-            print("📂 Shared all file information with Nova")
+        verbose_print("Shared all file information with Nova")
     
     # Get recent conversations for context
     recent_conversations = memory.get_recent_conversations(5)
@@ -590,16 +601,10 @@ def process_file_edits(response: str) -> str:
         content = content.strip()
         
         if filepath and content:
-            if CONFIG["color"]:
-                print(f"{YELLOW}📝 Nova is editing: {filepath}{RESET}")
-            else:
-                print(f"📝 Nova is editing: {filepath}")
+            verbose_print(f"Nova is editing: {filepath}")
             
             if edit_file(filepath, content):
-                if CONFIG["color"]:
-                    print(f"{GREEN}✅ Successfully updated {filepath}{RESET}")
-                else:
-                    print(f"✅ Successfully updated {filepath}")
+                verbose_print(f"Successfully updated {filepath}")
                 
                 # Replace the edit command in the response with a success message
                 response = response.replace(
@@ -607,10 +612,7 @@ def process_file_edits(response: str) -> str:
                     f"[File '{filepath}' has been updated successfully]"
                 )
             else:
-                if CONFIG["color"]:
-                    print(f"{RED}❌ Failed to update {filepath} (file may be outside current directory){RESET}")
-                else:
-                    print(f"❌ Failed to update {filepath} (file may be outside current directory)")
+                verbose_print(f"Failed to update {filepath} (file may be outside current directory)")
                 
                 response = response.replace(
                     f"FILE_EDIT: {filepath}\n```\n{content}\n```",
@@ -631,10 +633,7 @@ def process_memory_storage(response: str) -> str:
         
         if key and value:
             memory.store(key, value)
-            if CONFIG["color"]:
-                print(f"{MAGENTA}🧠 Nova stored in memory: {key} = {value}{RESET}")
-            else:
-                print(f"🧠 Nova stored in memory: {key} = {value}")
+            verbose_print(f"Nova stored in memory: {key} = {value}")
             
             response = response.replace(
                 f"MEMORY_STORE: {key}={value}",
@@ -695,6 +694,7 @@ def run_chat() -> None:
     if CONFIG["color"]:
         print(f"{BOLD}{CYAN}NOVA CODING AGENT{RESET}")
         print(f"{CYAN}Your AI-powered development assistant by NovaCompile.{RESET}")
+        print(f"{CYAN}Memory stored in: ~/.novacompile/compiler/memory/chat-memory.db{RESET}")
         print(f"{CYAN}Special commands:{RESET}")
         print(f"{CYAN}  ;edit - Grant permission to edit files{RESET}")
         print(f"{CYAN}  ;share - Share all file information with Nova{RESET}")
@@ -704,6 +704,7 @@ def run_chat() -> None:
     else:
         print("NOVA CODING AGENT")
         print("Your AI-powered development assistant by NovaCompile.")
+        print("Memory stored in: ~/.novacompile/compiler/memory/chat-memory.db")
         print("Special commands:")
         print("  ;edit - Grant permission to edit files")
         print("  ;share - Share all file information with Nova")
@@ -717,10 +718,7 @@ def run_chat() -> None:
     # Load previous conversation history
     recent_conv = memory.get_recent_conversations(5)
     if recent_conv:
-        if CONFIG["color"]:
-            print(f"{CYAN}📚 Loaded {len(recent_conv)} previous conversations from memory{RESET}")
-        else:
-            print(f"📚 Loaded {len(recent_conv)} previous conversations from memory")
+        verbose_print(f"Loaded {len(recent_conv)} previous conversations from memory")
     
     while True:
         if CONFIG["color"]:
@@ -748,19 +746,16 @@ def run_chat() -> None:
         # Check for exit commands
         if stripped in {"exit", "quit", ":q", ":quit", ":exit", "leave"}:
             if CONFIG["color"]:
-                print(f"{CYAN}Goodbye! Memory saved.{RESET}")
+                print(f"{CYAN}Goodbye! Memory saved to ~/.novacompile/compiler/memory/chat-memory.db{RESET}")
             else:
-                print("Goodbye! Memory saved.")
+                print("Goodbye! Memory saved to ~/.novacompile/compiler/memory/chat-memory.db")
             memory.close()
             break
 
         # Check for memory clear
         if stripped == ":clear_memory":
             memory.clear()
-            if CONFIG["color"]:
-                print(f"{GREEN}🧠 Memory cleared successfully!{RESET}")
-            else:
-                print("🧠 Memory cleared successfully!")
+            verbose_print("Memory cleared successfully")
             continue
 
         if not stripped:
@@ -902,9 +897,9 @@ def run_settings() -> None:
         elif choice == "3":
             memory.clear()
             if CONFIG["color"]:
-                print(f"{GREEN}🧠 AI memory cleared successfully!{RESET}")
+                print(f"{GREEN}AI memory cleared successfully!{RESET}")
             else:
-                print("🧠 AI memory cleared successfully!")
+                print("AI memory cleared successfully!")
             break
         elif choice == "4":
             memories = memory.get_all()
@@ -1034,6 +1029,7 @@ EXAMPLES:
   nova -c                                 # Start chat mode
   nova --chat                             # Start chat mode (alternative)
   nova --agent                            # Start agent mode (same as chat)
+  nova -c -v                              # Start chat with verbose output
   nova -s "print('Hello')"                # Run a single string
   nova --settings                         # Open settings menu
   nova script.no -v --show-code           # Verbose mode with code preview
