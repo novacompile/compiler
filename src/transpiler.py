@@ -1,4 +1,4 @@
-"""Nova - 3.2.1"""
+"""Nova - 2.3.1"""
 
 from __future__ import annotations
 from pathlib import Path
