@@ -561,6 +561,9 @@ def chat_with_ai(user_input: str, chat_history: list = None, permission_granted:
         
         "Be proactive in helping the user with their coding tasks. "
         "Ask clarifying questions when needed. "
+        "Always try to answer in the smallest amount of tokens possible without excluding any important information that the user hears. Unless the user says so, try to keep your reponse short and concise. "
+        "Try to keep your reponse around 1 to 10 lines. "
+        "When editing files, provide a brief summary of what changes you made rather than showing all the code. "
         "Provide explanations alongside code when it would be helpful. "
         "Think step by step when solving complex problems."
     )
@@ -633,17 +636,17 @@ def process_file_edits(response: str) -> str:
             if edit_file(filepath, content):
                 verbose_print(f"Successfully updated {filepath}")
                 
-                # Replace the edit command in the response with a success message
+                # Replace the edit command in the response with a simple success message
                 response = response.replace(
                     f"FILE_EDIT: {filepath}\n```\n{content}\n```",
-                    f"[File '{filepath}' has been updated successfully]"
+                    f"[Updated: {filepath}]"
                 )
             else:
                 verbose_print(f"Failed to update {filepath} (file may be outside current directory)")
                 
                 response = response.replace(
                     f"FILE_EDIT: {filepath}\n```\n{content}\n```",
-                    f"[Failed to update '{filepath}' - file may be outside current directory]"
+                    f"[Failed to update '{filepath}']"
                 )
     
     return response
