@@ -1,4 +1,4 @@
-# Nova AI - v2.3.0
+"""Nova - 3.2.1"""
 
 from __future__ import annotations
 from pathlib import Path
@@ -742,6 +742,163 @@ def fix_file(filepath: str, language: Optional[str] = None) -> str:
             return f"Successfully fixed {filepath}"
         else:
             return f"Failed to write fixed code to {filepath}"
+            
+    except requests.exceptions.Timeout:
+        return f"API request timed out after {CONFIG['timeout']} seconds"
+    except requests.exceptions.ConnectionError:
+        return "Failed to connect to Groq API. Check your internet connection."
+    except requests.exceptions.RequestException as e:
+        return f"API request failed: {str(e)}"
+    except Exception as e:
+        return f"Unexpected error: {str(e)}"
+
+
+def translate_file(filepath: str, target_language: str) -> str:
+    """Translate a file from its current language to the target language."""
+    current_dir = Path.cwd().resolve()
+    target_path = Path(filepath).resolve()
+    
+    # Check if the file is within the current directory
+    try:
+        target_path.relative_to(current_dir)
+    except ValueError:
+        return "Error: File outside current directory"
+    
+    if not target_path.exists():
+        return f"Error: File '{filepath}' not found"
+    
+    # Read the file content
+    try:
+        with open(target_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except Exception as e:
+        return f"Error reading file: {str(e)}"
+    
+    # Detect source language from extension
+    ext = target_path.suffix.lower()
+    lang_map = {
+        '.py': 'Python',
+        '.js': 'JavaScript',
+        '.ts': 'TypeScript',
+        '.rb': 'Ruby',
+        '.go': 'Go',
+        '.rs': 'Rust',
+        '.c': 'C',
+        '.cpp': 'C++',
+        '.java': 'Java',
+        '.sh': 'Bash',
+        '.bash': 'Bash',
+        '.pl': 'Perl',
+        '.lua': 'Lua',
+        '.r': 'R',
+        '.swift': 'Swift',
+        '.php': 'PHP',
+        '.html': 'HTML',
+        '.css': 'CSS',
+        '.json': 'JSON',
+        '.xml': 'XML',
+        '.yml': 'YAML',
+        '.yaml': 'YAML',
+        '.md': 'Markdown'
+    }
+    source_language = lang_map.get(ext, 'Python')
+    
+    # Get API key
+    api_key = get_api_key()
+    
+    # Prepare the translation request
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    system_instruction = (
+        f"You are an expert code translator. Translate the following {source_language} code "
+        f"to {target_language} code. Ensure the translated code:\n\n"
+        f"1. Maintains the exact same functionality and logic\n"
+        f"2. Follows the best practices and conventions of {target_language}\n"
+        f"3. Is fully functional and syntactically correct\n"
+        f"4. Preserves any comments or documentation\n"
+        f"5. Uses the appropriate standard libraries and idioms for {target_language}\n\n"
+        f"Output ONLY the translated code. No explanations, no markdown formatting, "
+        f"no code block markers (like ```{target_language.lower()}), just the raw code."
+    )
+    
+    payload = {
+        "model": CONFIG["model"],
+        "messages": [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": f"Translate this {source_language} code to {target_language}:\n\n{content}"}
+        ],
+        "temperature": 0.2
+    }
+    
+    try:
+        info(f"Translating {filepath} from {source_language} to {target_language}...")
+        response = requests.post(url, headers=headers, json=payload, timeout=CONFIG["timeout"])
+        
+        if response.status_code != 200:
+            return f"API Error (Status {response.status_code}): {response.text}"
+        
+        data = response.json()
+        translated_code = data["choices"][0]["message"]["content"]
+        
+        # Clean up any markdown formatting
+        lines = translated_code.splitlines()
+        clean_lines = []
+        in_code_block = False
+        for line in lines:
+            if line.strip().startswith("```"):
+                in_code_block = not in_code_block
+                continue
+            if not in_code_block and line.strip().startswith("```"):
+                continue
+            clean_lines.append(line)
+        
+        translated_code = "\n".join(clean_lines).strip()
+        
+        # Determine the output filename
+        target_ext_map = {
+            'Python': '.py',
+            'JavaScript': '.js',
+            'TypeScript': '.ts',
+            'Ruby': '.rb',
+            'Go': '.go',
+            'Rust': '.rs',
+            'C': '.c',
+            'C++': '.cpp',
+            'Java': '.java',
+            'Bash': '.sh',
+            'Perl': '.pl',
+            'Lua': '.lua',
+            'R': '.r',
+            'Swift': '.swift',
+            'PHP': '.php',
+            'HTML': '.html',
+            'CSS': '.css',
+            'JSON': '.json',
+            'XML': '.xml',
+            'YAML': '.yml',
+            'Markdown': '.md'
+        }
+        
+        target_ext = target_ext_map.get(target_language, '.txt')
+        output_filename = target_path.stem + target_ext
+        output_path = current_dir / output_filename
+        
+        # Check if output file already exists
+        if output_path.exists():
+            return f"Error: Output file '{output_filename}' already exists"
+        
+        # Write translated code to new file
+        try:
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write(translated_code)
+            return f"Successfully translated to {output_filename}"
+        except Exception as e:
+            return f"Failed to write translated code: {str(e)}"
             
     except requests.exceptions.Timeout:
         return f"API request timed out after {CONFIG['timeout']} seconds"
@@ -1555,6 +1712,11 @@ FIX OPTIONS:
   -L, --language LANG      Specify the language of the file being fixed
                            (default: auto-detect from extension, falls back to python)
 
+TRANSLATE OPTIONS:
+  -T, --translate LANG     Translate a file to the specified target language
+  Usage: nova -T python script.js    (translates script.js to Python)
+         nova -T javascript script.py (translates script.py to JavaScript)
+
 CHAT/AGENT MODE TOOLS:
   ;edit                    Grant permission to edit files
   ;all                     Grant all permissions
@@ -1616,6 +1778,9 @@ EXAMPLES:
   nova -f broken_script.py                # Fix a Python file
   nova -f broken_script.js -L javascript  # Fix a JavaScript file
   nova -f script.go -L go                 # Fix a Go file
+  nova -T python script.js                # Translate JavaScript to Python
+  nova -T javascript script.py            # Translate Python to JavaScript
+  nova -T go script.py                    # Translate Python to Go
   nova -s "print('Hello')"                # Run a single string
   nova --settings                         # Open settings menu
   nova script.no -v --show-code           # Verbose mode with code preview
@@ -1645,8 +1810,11 @@ def main() -> None:
     parser.add_argument("-f", "--fix", type=str, help="Scan and fix errors in a file")
     parser.add_argument("-L", "--language", type=str, help="Specify the language of the file being fixed (auto-detect if not specified)")
     
+    # Translate options
+    parser.add_argument("-T", "--translate", type=str, help="Translate a file to the specified target language (requires source_file)")
+    
     # Input options
-    parser.add_argument("source_file", nargs="?", help="Path to the .no file")
+    parser.add_argument("source_file", nargs="?", help="Path to the .no file (or source file for translation)")
     parser.add_argument("-s", "--string", type=str, help="Transpile and execute a single string of code")
     parser.add_argument("--stdin", action="store_true", help="Read input from stdin instead of a file")
     parser.add_argument("-o", "--output", type=str, help="Save generated code to a specific file instead of executing")
@@ -1720,6 +1888,22 @@ def main() -> None:
     # Handle settings
     if args.settings:
         run_settings()
+        return
+    
+    # Handle translation mode
+    if args.translate:
+        if not args.source_file:
+            error("Source file required for translation. Usage: nova -T python script.js")
+        result = translate_file(args.source_file, args.translate)
+        if CONFIG["color"]:
+            if "Successfully" in result:
+                print(f"{GREEN}{result}{RESET}")
+            elif "Error" in result:
+                print(f"{RED}{result}{RESET}")
+            else:
+                print(result)
+        else:
+            print(result)
         return
     
     # Handle fix mode
