@@ -10,7 +10,7 @@
   <br />
 </div>
 
-NovaCompile is an AI-powered runtime engine and transpiler designed to execute unstructured text, pseudo-code, and custom language files (`.no`) by instantly translating them into production-ready Python code on the fly using Groq Cloud infrastructure.
+NovaCompile is an AI-powered runtime engine and transpiler designed to execute unstructured text, pseudo-code, and custom language files (`.no`) by instantly translating them into production-ready Python code on the fly using Groq Cloud infrastructure. Nova also includes lots of other features including fast language translation, code fixing, a shell, and AI coding agent with custom permissions (see [docs/chat-permissions.md](docs/chat-permissions.md), and [docs/usage.md](docs/usage.md)).
 
 ---
 
