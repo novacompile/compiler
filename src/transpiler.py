@@ -296,12 +296,10 @@ def execute_python_code(python_code: str, env_vars: Optional[Dict[str, str]] = N
 def run_shell() -> None:
     """Start an interactive shell that transpiles and executes each submitted block."""
     if CONFIG["color"]:
-        print(f"{BOLD}{CYAN}╔══════════════════════════════════════════════╗{RESET}")
-        print(f"{BOLD}{CYAN}║         NOVA INTERACTIVE SHELL              ║{RESET}")
-        print(f"{BOLD}{CYAN}╚══════════════════════════════════════════════╝{RESET}")
+        print(f"{BOLD}{CYAN}NOVA INTERACTIVE SHELL{RESET}")
         print(f"{CYAN}Type your code and press Enter to run it.{RESET}")
-        print(f"{YELLOW}Use '\\' at the end of a line for multi-line input.{RESET}")
-        print(f"{MAGENTA}Type 'exit' or 'quit' to leave.{RESET}")
+        print(f"{CYAN}Use '\\' at the end of a line for multi-line input.{RESET}")
+        print(f"{CYAN}Type 'exit' or 'quit' to leave.{RESET}")
         print(f"{CYAN}Type ':settings' to open the settings menu.{RESET}\n")
     else:
         print("Nova Interactive Shell")
@@ -473,9 +471,9 @@ def save_output(python_code: str, output_path: str) -> None:
 def show_flags() -> None:
     """Display a list of all available flags with descriptions."""
     flags_info = """
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                           NOVA - AVAILABLE FLAGS                             ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+
+NOVA - AVAILABLE FLAGS
+---
 
 HELP OPTIONS:
   -h, --help               Show this help message and exit
