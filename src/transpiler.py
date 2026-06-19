@@ -367,23 +367,266 @@ def edit_file(filepath: str, new_content: str) -> bool:
         return False
 
 
-def get_all_files_content() -> str:
-    """Get content of all files in the current directory."""
+def create_file(filepath: str, content: str = "") -> bool:
+    """Create a new file with optional content."""
+    current_dir = Path.cwd().resolve()
+    target_path = Path(filepath).resolve()
+    
+    # Check if the file is within the current directory
+    try:
+        target_path.relative_to(current_dir)
+    except ValueError:
+        return False
+    
+    # Check if file already exists
+    if target_path.exists():
+        return False
+    
+    try:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(target_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        return True
+    except:
+        return False
+
+
+def delete_file(filepath: str) -> bool:
+    """Delete a file."""
+    current_dir = Path.cwd().resolve()
+    target_path = Path(filepath).resolve()
+    
+    # Check if the file is within the current directory
+    try:
+        target_path.relative_to(current_dir)
+    except ValueError:
+        return False
+    
+    if not target_path.exists():
+        return False
+    
+    try:
+        os.remove(target_path)
+        return True
+    except:
+        return False
+
+
+def rename_file(old_path: str, new_path: str) -> bool:
+    """Rename a file."""
+    current_dir = Path.cwd().resolve()
+    old_target = Path(old_path).resolve()
+    new_target = Path(new_path).resolve()
+    
+    # Check if both files are within the current directory
+    try:
+        old_target.relative_to(current_dir)
+        new_target.relative_to(current_dir)
+    except ValueError:
+        return False
+    
+    if not old_target.exists():
+        return False
+    
+    if new_target.exists():
+        return False
+    
+    try:
+        old_target.rename(new_target)
+        return True
+    except:
+        return False
+
+
+def make_directory(dirpath: str) -> bool:
+    """Create a new directory."""
+    current_dir = Path.cwd().resolve()
+    target_path = Path(dirpath).resolve()
+    
+    # Check if the directory is within the current directory
+    try:
+        target_path.relative_to(current_dir)
+    except ValueError:
+        return False
+    
+    try:
+        target_path.mkdir(parents=True, exist_ok=False)
+        return True
+    except:
+        return False
+
+
+def search_files(pattern: str) -> List[str]:
+    """Search for a pattern in files in the current directory."""
     current_dir = Path.cwd()
-    files_content = []
+    results = []
     
     for root, dirs, files in os.walk(current_dir):
         # Skip hidden directories and __pycache__
         dirs[:] = [d for d in dirs if not d.startswith('.') and d != '__pycache__']
         
-        for file in sorted(files):
+        for file in files:
             if not file.startswith('.') and not file.endswith('.bak'):
                 file_path = Path(root) / file
-                rel_path = file_path.relative_to(current_dir)
-                content = read_file_content(file_path)
-                files_content.append(f"--- {rel_path} ---\n{content}\n")
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        if pattern in content:
+                            rel_path = file_path.relative_to(current_dir)
+                            results.append(str(rel_path))
+                except:
+                    pass
     
-    return "\n".join(files_content)
+    return results
+
+
+def run_file(filepath: str) -> str:
+    """Run a file with the appropriate interpreter based on extension."""
+    current_dir = Path.cwd().resolve()
+    target_path = Path(filepath).resolve()
+    
+    # Check if the file is within the current directory
+    try:
+        target_path.relative_to(current_dir)
+    except ValueError:
+        return "Error: File outside current directory"
+    
+    if not target_path.exists():
+        return f"Error: File '{filepath}' not found"
+    
+    # Get file extension
+    ext = target_path.suffix.lower()
+    
+    # Map extensions to interpreters
+    interpreters = {
+        '.py': ['python3', target_path],
+        '.js': ['node', target_path],
+        '.rb': ['ruby', target_path],
+        '.go': ['go', 'run', target_path],
+        '.rs': ['cargo', 'run'],
+        '.c': ['gcc', target_path, '-o', 'temp_binary', '&&', './temp_binary'],
+        '.cpp': ['g++', target_path, '-o', 'temp_binary', '&&', './temp_binary'],
+        '.java': ['javac', target_path, '&&', 'java', target_path.stem],
+        '.sh': ['bash', target_path],
+        '.bash': ['bash', target_path],
+        '.pl': ['perl', target_path],
+        '.lua': ['lua', target_path],
+        '.r': ['Rscript', target_path],
+        '.swift': ['swift', target_path],
+        '.ts': ['ts-node', target_path],
+        '.php': ['php', target_path],
+        '.html': ['open', target_path],  # Mac/Linux
+        '.md': ['cat', target_path],
+        '.txt': ['cat', target_path],
+    }
+    
+    if ext not in interpreters:
+        return f"Error: Don't know how to run '{ext}' files"
+    
+    cmd = interpreters[ext]
+    
+    try:
+        if ext in ['.c', '.cpp']:
+            # Handle compiled languages
+            cmd_str = ' '.join(cmd)
+            result = subprocess.run(cmd_str, shell=True, capture_output=True, text=True, cwd=current_dir)
+            output = result.stdout + result.stderr
+        else:
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=current_dir)
+            output = result.stdout + result.stderr
+        
+        if result.returncode == 0:
+            return output or "Execution completed successfully"
+        else:
+            return f"Execution failed (exit {result.returncode}):\n{output}"
+    except FileNotFoundError as e:
+        return f"Error: {e}. Make sure the interpreter is installed."
+    except Exception as e:
+        return f"Error running file: {str(e)}"
+
+
+def lint_file(filepath: str) -> str:
+    """Run linting on a file."""
+    current_dir = Path.cwd().resolve()
+    target_path = Path(filepath).resolve()
+    
+    try:
+        target_path.relative_to(current_dir)
+    except ValueError:
+        return "Error: File outside current directory"
+    
+    if not target_path.exists():
+        return f"Error: File '{filepath}' not found"
+    
+    ext = target_path.suffix.lower()
+    
+    if ext == '.py':
+        # Try flake8, then pylint, then pyflakes
+        for linter in ['flake8', 'pylint', 'pyflakes']:
+            try:
+                result = subprocess.run([linter, str(target_path)], capture_output=True, text=True)
+                if result.returncode == 0:
+                    return "No linting issues found"
+                return result.stdout or result.stderr
+            except FileNotFoundError:
+                continue
+        return "Error: No Python linter found. Install flake8, pylint, or pyflakes."
+    else:
+        return f"Linting not supported for '{ext}' files"
+
+
+def get_file_history(filepath: str) -> List[str]:
+    """Get backup history for a file."""
+    backup_dir = get_backup_path()
+    target_path = Path(filepath).resolve()
+    base_name = target_path.name
+    
+    # Find all backups for this file
+    backups = []
+    for backup in backup_dir.glob(f"{base_name}.*.bak"):
+        backups.append(backup.name)
+    
+    return sorted(backups)
+
+
+def install_package(package: str) -> str:
+    """Install a Python package."""
+    try:
+        result = subprocess.run([sys.executable, '-m', 'pip', 'install', package], 
+                               capture_output=True, text=True)
+        if result.returncode == 0:
+            return f"Package '{package}' installed successfully"
+        else:
+            return f"Failed to install '{package}':\n{result.stderr}"
+    except Exception as e:
+        return f"Error installing package: {str(e)}"
+
+
+def debug_file(filepath: str) -> str:
+    """Run a file in debug mode."""
+    current_dir = Path.cwd().resolve()
+    target_path = Path(filepath).resolve()
+    
+    try:
+        target_path.relative_to(current_dir)
+    except ValueError:
+        return "Error: File outside current directory"
+    
+    if not target_path.exists():
+        return f"Error: File '{filepath}' not found"
+    
+    ext = target_path.suffix.lower()
+    
+    if ext == '.py':
+        try:
+            # Use pdb for Python debugging
+            cmd = [sys.executable, '-m', 'pdb', str(target_path)]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            return result.stdout or result.stderr
+        except Exception as e:
+            return f"Error debugging: {str(e)}"
+    else:
+        return f"Debugging not supported for '{ext}' files"
 
 
 def transpile_to_python(source: str, use_cache: bool = True) -> str:
@@ -492,12 +735,145 @@ def chat_with_ai(user_input: str, chat_history: list = None, permission_granted:
     # Check for permission triggers
     new_permission = permission_granted
     processed_input = user_input
+    tool_results = []
+    
+    # Check for ;all command - grants ALL permissions
+    if ';all' in user_input.lower():
+        new_permission = True
+        processed_input = user_input.replace(';all', '').strip()
+        verbose_print("All permissions granted")
+    
+    # Check for ;suno command - grants extensive permissions
+    if ';suno' in user_input.lower():
+        new_permission = True
+        processed_input = user_input.replace(';suno', '').strip()
+        verbose_print("Extended permissions granted (suno)")
     
     # Check for ;edit command
     if ';edit' in user_input.lower():
         new_permission = True
         processed_input = user_input.replace(';edit', '').strip()
         verbose_print("Edit permission granted")
+    
+    # Check for ;create command
+    if ';create' in user_input.lower():
+        # Parse: ;create filename "content"
+        match = re.search(r';create\s+([^\s]+)\s+"([^"]*)"', user_input)
+        if match:
+            filename = match.group(1)
+            content = match.group(2)
+            if create_file(filename, content):
+                tool_results.append(f"Created file: {filename}")
+            else:
+                tool_results.append(f"Failed to create {filename} (may already exist)")
+        processed_input = re.sub(r';create\s+[^\s]+\s+"[^"]*"', '', user_input).strip()
+    
+    # Check for ;delete command
+    if ';delete' in user_input.lower():
+        match = re.search(r';delete\s+([^\s]+)', user_input)
+        if match:
+            filename = match.group(1)
+            # Ask for confirmation via the AI response
+            tool_results.append(f"DELETE_CONFIRM: {filename}")
+        processed_input = re.sub(r';delete\s+[^\s]+', '', user_input).strip()
+    
+    # Check for ;rename command
+    if ';rename' in user_input.lower():
+        match = re.search(r';rename\s+([^\s]+)\s+([^\s]+)', user_input)
+        if match:
+            old_name = match.group(1)
+            new_name = match.group(2)
+            if rename_file(old_name, new_name):
+                tool_results.append(f"Renamed {old_name} to {new_name}")
+            else:
+                tool_results.append(f"Failed to rename {old_name} to {new_name}")
+        processed_input = re.sub(r';rename\s+[^\s]+\s+[^\s]+', '', user_input).strip()
+    
+    # Check for ;mkdir command
+    if ';mkdir' in user_input.lower():
+        match = re.search(r';mkdir\s+([^\s]+)', user_input)
+        if match:
+            dirname = match.group(1)
+            if make_directory(dirname):
+                tool_results.append(f"Created directory: {dirname}")
+            else:
+                tool_results.append(f"Failed to create directory {dirname}")
+        processed_input = re.sub(r';mkdir\s+[^\s]+', '', user_input).strip()
+    
+    # Check for ;search command
+    if ';search' in user_input.lower():
+        match = re.search(r';search\s+"([^"]+)"', user_input)
+        if not match:
+            match = re.search(r';search\s+([^\s]+)', user_input)
+        if match:
+            pattern = match.group(1)
+            results = search_files(pattern)
+            if results:
+                tool_results.append(f"Found '{pattern}' in: {', '.join(results)}")
+            else:
+                tool_results.append(f"No files found containing '{pattern}'")
+        processed_input = re.sub(r';search\s+[^\s]+', '', user_input).strip()
+    
+    # Check for ;read command
+    if ';read' in user_input.lower():
+        match = re.search(r';read\s+([^\s]+)', user_input)
+        if match:
+            filename = match.group(1)
+            content = read_file_content(filename)
+            tool_results.append(f"Content of {filename}:\n{content}")
+        processed_input = re.sub(r';read\s+[^\s]+', '', user_input).strip()
+    
+    # Check for ;run command
+    if ';run' in user_input.lower():
+        match = re.search(r';run\s+([^\s]+)', user_input)
+        if match:
+            filename = match.group(1)
+            output = run_file(filename)
+            tool_results.append(f"Output of {filename}:\n{output}")
+        processed_input = re.sub(r';run\s+[^\s]+', '', user_input).strip()
+    
+    # Check for ;lint command
+    if ';lint' in user_input.lower():
+        match = re.search(r';lint\s+([^\s]+)', user_input)
+        if match:
+            filename = match.group(1)
+            result = lint_file(filename)
+            tool_results.append(f"Lint results for {filename}:\n{result}")
+        processed_input = re.sub(r';lint\s+[^\s]+', '', user_input).strip()
+    
+    # Check for ;debug command
+    if ';debug' in user_input.lower():
+        match = re.search(r';debug\s+([^\s]+)', user_input)
+        if match:
+            filename = match.group(1)
+            result = debug_file(filename)
+            tool_results.append(f"Debug output for {filename}:\n{result}")
+        processed_input = re.sub(r';debug\s+[^\s]+', '', user_input).strip()
+    
+    # Check for ;history command
+    if ';history' in user_input.lower():
+        match = re.search(r';history\s+([^\s]+)', user_input)
+        if match:
+            filename = match.group(1)
+            history = get_file_history(filename)
+            if history:
+                tool_results.append(f"Backups for {filename}: {', '.join(history)}")
+            else:
+                tool_results.append(f"No backups found for {filename}")
+        processed_input = re.sub(r';history\s+[^\s]+', '', user_input).strip()
+    
+    # Check for ;install command
+    if ';install' in user_input.lower():
+        match = re.search(r';install\s+([^\s]+)', user_input)
+        if match:
+            package = match.group(1)
+            result = install_package(package)
+            tool_results.append(result)
+        processed_input = re.sub(r';install\s+[^\s]+', '', user_input).strip()
+    
+    # Add tool results to the input if any
+    if tool_results:
+        processed_input += "\n\n[TOOL RESULTS]\n" + "\n".join(tool_results)
     
     # Check for ;share command
     if ';share' in user_input.lower():
@@ -535,7 +911,9 @@ def chat_with_ai(user_input: str, chat_history: list = None, permission_granted:
         "9. Building full-stack applications\n"
         "10. API design and integration\n\n"
         
-        "You have access to the current project directory and can edit files when granted permission. "
+        "You have access to the current project directory and can perform various operations when given permission: "
+        "edit files, create files, delete files, rename files, create directories, search files, read files, "
+        "run files in various languages, lint code, debug code, install packages, and view file history. "
         "You are professional, thorough, and precise in your responses. "
         "When providing code, ensure it is complete, functional, and follows best practices. "
         "You can adapt to different programming styles and preferences.\n\n"
@@ -543,28 +921,29 @@ def chat_with_ai(user_input: str, chat_history: list = None, permission_granted:
         f"STORED MEMORIES:\n{memory_summary}\n\n"
         f"RECENT CONVERSATION CONTEXT:\n{memory_context}\n\n"
         
-        "TOOL CAPABILITIES:\n"
-        "- You can view file information when the user uses ';share'\n"
-        "- You can edit files when the user grants permission with ';edit'\n"
-        "- You can only edit files within the current working directory\n"
-        "- You have persistent memory - you can remember information across sessions\n"
-        "- You can store important project information and context\n\n"
-        
-        "When you need to edit a file, respond with the file path and content in this format:\n"
-        "FILE_EDIT: path/to/file\n"
-        "```\n"
-        "new file content here\n"
-        "```\n\n"
-        
-        "You can also store information in memory using the format:\n"
-        "MEMORY_STORE: key=value\n\n"
+        "TOOL CAPABILITIES (require permission):\n"
+        "- ;edit - Edit files (requires permission)\n"
+        "- ;create filename \"content\" - Create new files\n"
+        "- ;delete filename - Delete files\n"
+        "- ;rename old new - Rename files\n"
+        "- ;mkdir dirname - Create directories\n"
+        "- ;search \"pattern\" - Search files\n"
+        "- ;read filename - Read file content\n"
+        "- ;run filename - Run files (Python, JS, Ruby, Go, C, C++, Java, Shell, etc.)\n"
+        "- ;lint filename - Check code quality\n"
+        "- ;debug filename - Debug code\n"
+        "- ;history filename - Show backup history\n"
+        "- ;install package - Install Python packages\n"
+        "- ;share - Share all file information\n"
+        "- ;all - Grant all permissions\n"
+        "- ;suno - Grant extended permissions\n\n"
         
         "Be proactive in helping the user with their coding tasks. "
         "Ask clarifying questions when needed. "
-        "Always try to answer in the smallest amount of tokens possible without excluding any important information that the user hears. Unless the user says so, try to keep your reponse short and concise. "
-        "Try to keep your reponse around 1 to 10 lines. "
-        "When editing files, provide a brief summary of what changes you made rather than showing all the code. "
-        "Provide explanations alongside code when it would be helpful. "
+        "Always try to answer in the smallest amount of tokens possible without excluding important information. "
+        "Try to keep your response around 1 to 10 lines. "
+        "When editing files, provide a brief summary of what changes you made. "
+        "Provide explanations alongside code when helpful. "
         "Think step by step when solving complex problems."
     )
 
@@ -728,7 +1107,20 @@ def run_chat() -> None:
         print(f"{CYAN}Backups stored in: ~/.novacompile/compiler/backups/{RESET}")
         print(f"{CYAN}Special commands:{RESET}")
         print(f"{CYAN}  ;edit - Grant permission to edit files{RESET}")
-        print(f"{CYAN}  ;share - Share all file information with Nova{RESET}")
+        print(f"{CYAN}  ;all - Grant all permissions{RESET}")
+        print(f"{CYAN}  ;suno - Grant extended permissions{RESET}")
+        print(f"{CYAN}  ;share - Share all file information{RESET}")
+        print(f"{CYAN}  ;read file - Read file content{RESET}")
+        print(f"{CYAN}  ;run file - Run file in any language{RESET}")
+        print(f"{CYAN}  ;create file \"content\" - Create new file{RESET}")
+        print(f"{CYAN}  ;delete file - Delete file{RESET}")
+        print(f"{CYAN}  ;rename old new - Rename file{RESET}")
+        print(f"{CYAN}  ;mkdir dir - Create directory{RESET}")
+        print(f"{CYAN}  ;search \"pattern\" - Search files{RESET}")
+        print(f"{CYAN}  ;lint file - Lint code{RESET}")
+        print(f"{CYAN}  ;debug file - Debug code{RESET}")
+        print(f"{CYAN}  ;history file - Show backup history{RESET}")
+        print(f"{CYAN}  ;install package - Install Python package{RESET}")
         print(f"{CYAN}  :clear_memory - Clear AI's memory{RESET}")
         print(f"{CYAN}  Type 'exit' or 'quit' to leave.{RESET}")
         print(f"{CYAN}  Type ':settings' to open the settings menu.{RESET}\n")
@@ -739,7 +1131,20 @@ def run_chat() -> None:
         print("Backups stored in: ~/.novacompile/compiler/backups/")
         print("Special commands:")
         print("  ;edit - Grant permission to edit files")
-        print("  ;share - Share all file information with Nova")
+        print("  ;all - Grant all permissions")
+        print("  ;suno - Grant extended permissions")
+        print("  ;share - Share all file information")
+        print("  ;read file - Read file content")
+        print("  ;run file - Run file in any language")
+        print("  ;create file \"content\" - Create new file")
+        print("  ;delete file - Delete file")
+        print("  ;rename old new - Rename file")
+        print("  ;mkdir dir - Create directory")
+        print("  ;search \"pattern\" - Search files")
+        print("  ;lint file - Lint code")
+        print("  ;debug file - Debug code")
+        print("  ;history file - Show backup history")
+        print("  ;install package - Install Python package")
         print("  :clear_memory - Clear AI's memory")
         print("  Type 'exit' or 'quit' to leave.")
         print("  Type ':settings' to open the settings menu.\n")
@@ -1023,7 +1428,20 @@ MODE OPTIONS:
 
 CHAT/AGENT MODE TOOLS:
   ;edit                    Grant permission to edit files
+  ;all                     Grant all permissions
+  ;suno                    Grant extended permissions
   ;share                   Share all file information with Nova
+  ;read file               Read file content
+  ;run file                Run files (Python, JS, Ruby, Go, C, C++, Java, Shell, etc.)
+  ;create file "content"   Create new file
+  ;delete file             Delete file (requires confirmation)
+  ;rename old new          Rename file
+  ;mkdir dir               Create directory
+  ;search "pattern"        Search files
+  ;lint file               Lint code
+  ;debug file              Debug code
+  ;history file            Show backup history
+  ;install package         Install Python package
   :clear_memory            Clear AI's memory
   :settings                Open settings menu
 
