@@ -323,11 +323,17 @@ def edit_file(filepath: str, new_content: str) -> bool:
     backup_path = target_path.with_suffix(target_path.suffix + '.bak')
     if target_path.exists():
         try:
-            target_path.rename(backup_path)
+            # Read the original content
+            with open(target_path, 'r', encoding='utf-8') as f:
+                original_content = f.read()
+            
+            # Write backup
+            with open(backup_path, 'w', encoding='utf-8') as f:
+                f.write(original_content)
         except:
             return False
     
-    # Write new content
+    # Write new content directly to the target file
     try:
         target_path.parent.mkdir(parents=True, exist_ok=True)
         with open(target_path, 'w', encoding='utf-8') as f:
@@ -336,7 +342,13 @@ def edit_file(filepath: str, new_content: str) -> bool:
     except:
         # Restore backup if write fails
         if backup_path.exists():
-            backup_path.rename(target_path)
+            try:
+                with open(backup_path, 'r', encoding='utf-8') as f:
+                    backup_content = f.read()
+                with open(target_path, 'w', encoding='utf-8') as f:
+                    f.write(backup_content)
+            except:
+                pass
         return False
 
 
