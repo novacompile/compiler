@@ -21,6 +21,8 @@ RED = '\033[91m'
 GREEN = '\033[92m'
 YELLOW = '\033[93m'
 CYAN = '\033[96m'
+MAGENTA = '\033[95m'
+BOLD = '\033[1m'
 RESET = '\033[0m'
 
 
@@ -34,6 +36,7 @@ CONFIG = {
     "quiet": False,
     "color": True,
     "interpreter": sys.executable,
+    "show_execution_status": True,  # New: show success/fail after execution
 }
 
 
@@ -68,7 +71,7 @@ def info(msg: str) -> None:
 
 def success(msg: str) -> None:
     """Print a green success message."""
-    if CONFIG["quiet"]:
+    if CONFIG["quiet"] or not CONFIG["show_execution_status"]:
         return
     if CONFIG["color"]:
         print(f"{GREEN}SUCCESS:{RESET} {msg}")
@@ -278,7 +281,11 @@ def execute_python_code(python_code: str, env_vars: Optional[Dict[str, str]] = N
         if completed.returncode == 0:
             success("Execution completed successfully.")
         else:
-            warn(f"Execution completed with exit code: {completed.returncode}")
+            # Always show failures, even if show_execution_status is False
+            if CONFIG["color"]:
+                print(f"{RED}FAILED:{RESET} Execution completed with exit code: {completed.returncode}")
+            else:
+                print(f"FAILED: Execution completed with exit code: {completed.returncode}")
         return completed.returncode
     except FileNotFoundError:
         error(f"Python interpreter not found: {interpreter}")
@@ -288,20 +295,35 @@ def execute_python_code(python_code: str, env_vars: Optional[Dict[str, str]] = N
 
 def run_shell() -> None:
     """Start an interactive shell that transpiles and executes each submitted block."""
-    if not CONFIG["quiet"]:
-        print("Nova Shell")
+    if CONFIG["color"]:
+        print(f"{BOLD}{CYAN}╔══════════════════════════════════════════════╗{RESET}")
+        print(f"{BOLD}{CYAN}║         NOVA INTERACTIVE SHELL              ║{RESET}")
+        print(f"{BOLD}{CYAN}╚══════════════════════════════════════════════╝{RESET}")
+        print(f"{CYAN}Type your code and press Enter to run it.{RESET}")
+        print(f"{YELLOW}Use '\\' at the end of a line for multi-line input.{RESET}")
+        print(f"{MAGENTA}Type 'exit' or 'quit' to leave.{RESET}")
+        print(f"{CYAN}Type ':settings' to open the settings menu.{RESET}\n")
+    else:
+        print("Nova Interactive Shell")
         print("Type your code and press Enter to run it.")
         print("Use '\\' at the end of a line for multi-line input.")
-        print("Type 'exit' or 'quit' to leave.\n")
+        print("Type 'exit' or 'quit' to leave.")
+        print("Type ':settings' to open the settings menu.\n")
     
     buffer: list[str] = []
     in_multiline = False
 
     while True:
         if in_multiline:
-            prompt = "...   "
+            if CONFIG["color"]:
+                prompt = f"{YELLOW}...   {RESET}"
+            else:
+                prompt = "...   "
         else:
-            prompt = "nova> "
+            if CONFIG["color"]:
+                prompt = f"{GREEN}nova> {RESET}"
+            else:
+                prompt = "nova> "
 
         try:
             line = input(prompt)
@@ -315,10 +337,15 @@ def run_shell() -> None:
                 in_multiline = False
                 warn("Cancelled multi-line input")
             else:
-                break
+                print(f"{YELLOW}Use 'exit' or 'quit' to leave{RESET}" if CONFIG["color"] else "Use 'exit' or 'quit' to leave")
             continue
 
         stripped = line.strip()
+
+        # Check for settings command
+        if not buffer and not in_multiline and stripped == ":settings":
+            run_settings()
+            continue
 
         # Check for exit commands
         if not buffer and not in_multiline and stripped in {"exit", "quit", ":q", ":quit", ":exit", "leave"}:
@@ -360,13 +387,23 @@ def run_settings() -> None:
         return
     
     while True:
-        print("\nSettings")
-        print("========")
-        print("1. Clear cache")
-        print("2. Show cache info")
-        print("3. Back")
+        if CONFIG["color"]:
+            print(f"\n{BOLD}{MAGENTA}Settings{RESET}")
+            print(f"{MAGENTA}========{RESET}")
+            print(f"1. Clear cache")
+            print(f"2. Show cache info")
+            print(f"3. Toggle execution status messages (currently: {GREEN if CONFIG['show_execution_status'] else RED}{'ON' if CONFIG['show_execution_status'] else 'OFF'}{RESET})")
+            print(f"4. Back")
+        else:
+            print("\nSettings")
+            print("========")
+            print("1. Clear cache")
+            print("2. Show cache info")
+            print(f"3. Toggle execution status messages (currently: {'ON' if CONFIG['show_execution_status'] else 'OFF'})")
+            print("4. Back")
         
-        choice = input("Select an option (1-3): ").strip()
+        choice = input("Select an option (1-4): ").strip()
+        
         if choice == "1":
             clear_cache()
             break
@@ -375,6 +412,14 @@ def run_settings() -> None:
             print(f"Cache contains {entries} entries ({size:,} bytes)")
             break
         elif choice == "3":
+            CONFIG["show_execution_status"] = not CONFIG["show_execution_status"]
+            status = "ON" if CONFIG["show_execution_status"] else "OFF"
+            if CONFIG["color"]:
+                print(f"{GREEN}Execution status messages turned {status}{RESET}")
+            else:
+                print(f"Execution status messages turned {status}")
+            break
+        elif choice == "4":
             break
         else:
             warn("Invalid option. Please try again.")
@@ -433,45 +478,45 @@ def show_flags() -> None:
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
 HELP OPTIONS:
-  -h, --help           Show this help message and exit
-  --flags              Display this list of all available flags with descriptions
+  -h, --help               Show this help message and exit
+  --flags                  Display this list of all available flags with descriptions
 
 INPUT OPTIONS:
-  source_file          Path to the .no file to transpile
-  -s, --string TEXT    Transpile and execute a single string of code
-  --stdin              Read input from stdin instead of a file
-  -o, --output FILE    Save generated code to a file instead of executing
+  source_file              Path to the .no file to transpile
+  -s, --string TEXT        Transpile and execute a single string of code
+  --stdin                  Read input from stdin instead of a file
+  -o, --output FILE        Save generated code to a file instead of executing
 
 BEHAVIOR OPTIONS:
-  -n, --no-cache       Disable cache for this run
-  --show-code          Show the generated Python code without executing it
-  --dry-run            Show what would be transpiled without executing
-  -v, --verbose        Show detailed output including API calls and cache info
-  -q, --quiet          Suppress all non-error output
-  --no-color           Disable colored output in terminal
-  -i, --interactive    Drop into interactive mode after execution (like python -i)
+  -n, --no-cache           Disable cache for this run
+  --show-code              Show the generated Python code without executing it
+  --dry-run                Show what would be transpiled without executing
+  -v, --verbose            Show detailed output including API calls and cache info
+  -q, --quiet              Suppress all non-error output
+  --no-color               Disable colored output in terminal
+  -i, --interactive        Drop into interactive mode after execution (like python -i)
 
 MODEL AND PERFORMANCE:
-  --model MODEL        Groq model to use (default: openai/gpt-oss-120b)
-  -t, --temperature FLOAT Temperature for the AI model (0.0-1.0, default: 0.1)
-  --timeout SECONDS    API timeout in seconds (default: 30)
+  --model MODEL            Groq model to use (default: openai/gpt-oss-120b)
+  -t, --temperature FLOAT  Temperature for the AI model (0.0-1.0, default: 0.1)
+  --timeout SECONDS        API timeout in seconds (default: 30)
 
 CACHE MANAGEMENT:
-  --cache-size         Show size and number of entries in cache
-  --cache-ttl SECONDS  Set cache expiration time in seconds (auto-clear old entries)
-  --settings           Open interactive settings menu
+  --cache-size             Show size and number of entries in cache
+  --cache-ttl SECONDS      Set cache expiration time in seconds (auto-clear old entries)
+  --settings               Open interactive settings menu
 
 ENVIRONMENT AND EXECUTION:
-  --env KEY=value      Set environment variables (can be used multiple times)
-  --interpreter PATH   Python interpreter to use for execution
-  --log-file FILE      Log all transpilations and execution results to a file
+  --env KEY=value          Set environment variables (can be used multiple times)
+  --interpreter PATH       Python interpreter to use for execution
+  --log-file FILE          Log all transpilations and execution results to a file
 
 SECURITY:
   --allow-imports LIST Comma-separated list of allowed imports (not yet implemented)
 
 EXAMPLES:
   nova script.no                          # Run a .no file
-  nova -s "print('Hello')"               # Run a single string
+  nova -s "print('Hello')"                # Run a single string
   nova --settings                         # Open settings menu
   nova script.no -v --show-code           # Verbose mode with code preview
   nova script.no --env API_KEY=123        # With environment variables
