@@ -98,6 +98,10 @@ python src/transpiler.py [filename].no
 > To be able to run the entrypoint directly, you must be inside the root directory of `compiler` (by default it is `~/.novacompile/compile`)
 
 
+## Full Usage
+
+For the full documentation on usage, read [usage.md](docs/usage.md).
+
 ## License
 
 Nova Compiler is under the [MIT License](LICENSE). Make sure that you have read and understood it before reproducing this repo.
