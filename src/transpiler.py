@@ -11,8 +11,10 @@ import subprocess
 import sys
 import time
 import shlex
+import sqlite3
+import re
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import requests
 
 
@@ -36,8 +38,95 @@ CONFIG = {
     "quiet": False,
     "color": True,
     "interpreter": sys.executable,
-    "show_execution_status": True,  # New: show success/fail after execution
+    "show_execution_status": True,
 }
+
+
+class Memory:
+    """Manages persistent memory for the AI using SQLite."""
+    
+    def __init__(self, memory_file: str = "nova_memory.db"):
+        self.memory_file = memory_file
+        self.conn = None
+        self._init_db()
+    
+    def _init_db(self):
+        """Initialize the database with required tables."""
+        self.conn = sqlite3.connect(self.memory_file)
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS memory (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                timestamp REAL
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS conversation (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                role TEXT,
+                content TEXT,
+                timestamp REAL
+            )
+        ''')
+        self.conn.commit()
+    
+    def store(self, key: str, value: str) -> None:
+        """Store a value in memory."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO memory (key, value, timestamp) VALUES (?, ?, ?)",
+            (key, value, time.time())
+        )
+        self.conn.commit()
+    
+    def retrieve(self, key: str) -> Optional[str]:
+        """Retrieve a value from memory."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT value FROM memory WHERE key = ?", (key,))
+        result = cursor.fetchone()
+        return result[0] if result else None
+    
+    def get_all(self) -> Dict[str, str]:
+        """Get all stored memories."""
+        cursor = self.conn.cursor()
+        cursor.execute("SELECT key, value FROM memory")
+        results = cursor.fetchall()
+        return {key: value for key, value in results}
+    
+    def clear(self) -> None:
+        """Clear all memory."""
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM memory")
+        self.conn.commit()
+    
+    def add_conversation(self, role: str, content: str) -> None:
+        """Add a conversation entry."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "INSERT INTO conversation (role, content, timestamp) VALUES (?, ?, ?)",
+            (role, content, time.time())
+        )
+        self.conn.commit()
+    
+    def get_recent_conversations(self, limit: int = 10) -> List[Dict[str, str]]:
+        """Get recent conversation history."""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            "SELECT role, content FROM conversation ORDER BY timestamp DESC LIMIT ?",
+            (limit,)
+        )
+        results = cursor.fetchall()
+        return [{"role": role, "content": content} for role, content in reversed(results)]
+    
+    def close(self):
+        """Close the database connection."""
+        if self.conn:
+            self.conn.close()
+
+
+# Global memory instance
+memory = Memory()
 
 
 def error(msg: str) -> None:
@@ -147,10 +236,8 @@ def clean_old_cache_entries(cache: dict) -> dict:
     return cleaned
 
 
-def transpile_to_python(source: str, use_cache: bool = True) -> str:
-    """Sends a raw HTTP POST request using an active production Groq model ID."""
-    start_time = time.time()
-    
+def get_api_key() -> str:
+    """Get the API key from the key file."""
     src_dir = Path(__file__).resolve().parent
     file_path = src_dir.parent / "key" / "raw.txt"
     try:
@@ -158,8 +245,107 @@ def transpile_to_python(source: str, use_cache: bool = True) -> str:
             api_key = file.read().strip()
             if not api_key:
                 error("API key not found. Please run setup.sh to add your API key.")
+            return api_key
     except FileNotFoundError:
         error(f"API key file not found at {file_path}. Please run setup.sh.")
+
+
+def get_file_tree(directory: str = ".") -> str:
+    """Get a tree representation of all files in the current directory."""
+    current_dir = Path(directory).resolve()
+    tree_lines = []
+    
+    for root, dirs, files in os.walk(current_dir):
+        # Skip hidden directories and __pycache__
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d != '__pycache__']
+        
+        rel_path = Path(root).relative_to(current_dir)
+        if rel_path == Path('.'):
+            tree_lines.append(f"📁 ./")
+        else:
+            tree_lines.append(f"📁 {rel_path}/")
+        
+        for file in sorted(files):
+            if not file.startswith('.') and not file.endswith('.bak'):
+                file_path = Path(root) / file
+                try:
+                    size = file_path.stat().st_size
+                    size_str = f"({size} bytes)" if size < 1024 else f"({size/1024:.1f} KB)"
+                    tree_lines.append(f"  📄 {file} {size_str}")
+                except:
+                    tree_lines.append(f"  📄 {file}")
+        
+        tree_lines.append("")
+    
+    return "\n".join(tree_lines)
+
+
+def read_file_content(filepath: str) -> str:
+    """Read the content of a file."""
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return f.read()
+    except UnicodeDecodeError:
+        return "[Binary file - content not displayed]"
+    except Exception as e:
+        return f"[Error reading file: {str(e)}]"
+
+
+def edit_file(filepath: str, new_content: str) -> bool:
+    """Edit a file with new content. Only allows editing files within current directory."""
+    current_dir = Path.cwd().resolve()
+    target_path = Path(filepath).resolve()
+    
+    # Check if the file is within the current directory
+    try:
+        target_path.relative_to(current_dir)
+    except ValueError:
+        return False  # File is outside current directory
+    
+    # Create backup
+    backup_path = target_path.with_suffix(target_path.suffix + '.bak')
+    if target_path.exists():
+        try:
+            target_path.rename(backup_path)
+        except:
+            return False
+    
+    # Write new content
+    try:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(target_path, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+        return True
+    except:
+        # Restore backup if write fails
+        if backup_path.exists():
+            backup_path.rename(target_path)
+        return False
+
+
+def get_all_files_content() -> str:
+    """Get content of all files in the current directory."""
+    current_dir = Path.cwd()
+    files_content = []
+    
+    for root, dirs, files in os.walk(current_dir):
+        # Skip hidden directories and __pycache__
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d != '__pycache__']
+        
+        for file in sorted(files):
+            if not file.startswith('.') and not file.endswith('.bak'):
+                file_path = Path(root) / file
+                rel_path = file_path.relative_to(current_dir)
+                content = read_file_content(file_path)
+                files_content.append(f"--- {rel_path} ---\n{content}\n")
+    
+    return "\n".join(files_content)
+
+
+def transpile_to_python(source: str, use_cache: bool = True) -> str:
+    """Sends a raw HTTP POST request using an active production Groq model ID."""
+    start_time = time.time()
+    api_key = get_api_key()
 
     # Check cache first
     if use_cache:
@@ -247,6 +433,217 @@ def transpile_to_python(source: str, use_cache: bool = True) -> str:
         error(f"Unexpected error during transpilation: {str(e)}")
 
 
+def chat_with_ai(user_input: str, chat_history: list = None, permission_granted: bool = False) -> tuple[str, list, bool]:
+    """Send a message to the AI in chat mode with tool capabilities."""
+    start_time = time.time()
+    api_key = get_api_key()
+
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+
+    # Check for permission triggers
+    new_permission = permission_granted
+    processed_input = user_input
+    
+    # Check for ;edit command
+    if ';edit' in user_input.lower():
+        new_permission = True
+        processed_input = user_input.replace(';edit', '').strip()
+        if CONFIG["color"]:
+            print(f"{GREEN}🔓 Edit permission granted!{RESET}")
+        else:
+            print("🔓 Edit permission granted!")
+    
+    # Check for ;share command
+    if ';share' in user_input.lower():
+        file_tree = get_file_tree()
+        all_content = get_all_files_content()
+        share_info = f"\n\n[FILE SYSTEM INFORMATION]\n\nDirectory Structure:\n{file_tree}\n\nFile Contents:\n{all_content}"
+        processed_input = processed_input.replace(';share', '').strip()
+        processed_input += share_info
+        if CONFIG["color"]:
+            print(f"{CYAN}📂 Shared all file information with Nova{RESET}")
+        else:
+            print("📂 Shared all file information with Nova")
+    
+    # Get recent conversations for context
+    recent_conversations = memory.get_recent_conversations(5)
+    memory_context = "\n".join([
+        f"{conv['role']}: {conv['content'][:200]}..." 
+        for conv in recent_conversations
+    ])
+    
+    # Get stored memories
+    stored_memories = memory.get_all()
+    memory_summary = "\n".join([f"{k}: {v}" for k, v in stored_memories.items()]) if stored_memories else "No stored memories"
+
+    system_instruction = (
+        "You are Nova, an advanced AI coding agent developed by NovaCompile. "
+        "Your primary purpose is to assist with programming, software development, and coding tasks. "
+        "You are a specialized development assistant that can help with:\n\n"
+        
+        "1. Writing, reviewing, and debugging code in various programming languages\n"
+        "2. Explaining programming concepts and algorithms\n"
+        "3. Designing software architecture and solutions\n"
+        "4. Optimizing code for performance and efficiency\n"
+        "5. Converting code between different languages\n"
+        "6. Creating documentation and comments\n"
+        "7. Analyzing code for bugs and security issues\n"
+        "8. Suggesting best practices and design patterns\n"
+        "9. Building full-stack applications\n"
+        "10. API design and integration\n\n"
+        
+        "You have access to the current project directory and can edit files when granted permission. "
+        "You are professional, thorough, and precise in your responses. "
+        "When providing code, ensure it is complete, functional, and follows best practices. "
+        "You can adapt to different programming styles and preferences.\n\n"
+        
+        f"STORED MEMORIES:\n{memory_summary}\n\n"
+        f"RECENT CONVERSATION CONTEXT:\n{memory_context}\n\n"
+        
+        "TOOL CAPABILITIES:\n"
+        "- You can view file information when the user uses ';share'\n"
+        "- You can edit files when the user grants permission with ';edit'\n"
+        "- You can only edit files within the current working directory\n"
+        "- You have persistent memory - you can remember information across sessions\n"
+        "- You can store important project information and context\n\n"
+        
+        "When you need to edit a file, respond with the file path and content in this format:\n"
+        "FILE_EDIT: path/to/file\n"
+        "```\n"
+        "new file content here\n"
+        "```\n\n"
+        
+        "You can also store information in memory using the format:\n"
+        "MEMORY_STORE: key=value\n\n"
+        
+        "Be proactive in helping the user with their coding tasks. "
+        "Ask clarifying questions when needed. "
+        "Provide explanations alongside code when it would be helpful. "
+        "Think step by step when solving complex problems."
+    )
+
+    # Initialize chat history if None
+    if chat_history is None:
+        chat_history = [{"role": "system", "content": system_instruction}]
+    
+    # Add user message to history
+    chat_history.append({"role": "user", "content": processed_input})
+    
+    payload = {
+        "model": CONFIG["model"],
+        "messages": chat_history,
+        "temperature": CONFIG["temperature"]
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=CONFIG["timeout"])
+        
+        if response.status_code != 200:
+            safe_msg = response.text.replace('"', '\\"')
+            error(f"API Error (Status {response.status_code}): {safe_msg}")
+            
+        data = response.json()
+        assistant_response = data["choices"][0]["message"]["content"]
+        
+        # Process the response for file edits
+        if new_permission:
+            assistant_response = process_file_edits(assistant_response)
+        
+        # Process memory storage
+        assistant_response = process_memory_storage(assistant_response)
+        
+        # Add assistant response to history
+        chat_history.append({"role": "assistant", "content": assistant_response})
+        
+        # Store in conversation memory
+        memory.add_conversation("user", processed_input)
+        memory.add_conversation("assistant", assistant_response)
+
+        elapsed = time.time() - start_time
+        info(f"Request completed in {elapsed:.2f}s")
+        
+        return assistant_response, chat_history, new_permission
+
+    except requests.exceptions.Timeout:
+        error(f"API request timed out after {CONFIG['timeout']} seconds. Use --timeout to increase.")
+    except requests.exceptions.ConnectionError:
+        error("Failed to connect to Groq API. Check your internet connection.")
+    except requests.exceptions.RequestException as e:
+        error(f"API request failed: {str(e)}")
+    except Exception as e:
+        error(f"Unexpected error during chat: {str(e)}")
+
+
+def process_file_edits(response: str) -> str:
+    """Process file edit commands in the AI response."""
+    # Look for FILE_EDIT: pattern
+    pattern = r'FILE_EDIT:\s*([^\n]+)\n```(?:\w+)?\n(.*?)```'
+    matches = re.findall(pattern, response, re.DOTALL)
+    
+    for filepath, content in matches:
+        filepath = filepath.strip()
+        content = content.strip()
+        
+        if filepath and content:
+            if CONFIG["color"]:
+                print(f"{YELLOW}📝 Nova is editing: {filepath}{RESET}")
+            else:
+                print(f"📝 Nova is editing: {filepath}")
+            
+            if edit_file(filepath, content):
+                if CONFIG["color"]:
+                    print(f"{GREEN}✅ Successfully updated {filepath}{RESET}")
+                else:
+                    print(f"✅ Successfully updated {filepath}")
+                
+                # Replace the edit command in the response with a success message
+                response = response.replace(
+                    f"FILE_EDIT: {filepath}\n```\n{content}\n```",
+                    f"[File '{filepath}' has been updated successfully]"
+                )
+            else:
+                if CONFIG["color"]:
+                    print(f"{RED}❌ Failed to update {filepath} (file may be outside current directory){RESET}")
+                else:
+                    print(f"❌ Failed to update {filepath} (file may be outside current directory)")
+                
+                response = response.replace(
+                    f"FILE_EDIT: {filepath}\n```\n{content}\n```",
+                    f"[Failed to update '{filepath}' - file may be outside current directory]"
+                )
+    
+    return response
+
+
+def process_memory_storage(response: str) -> str:
+    """Process memory storage commands in the AI response."""
+    pattern = r'MEMORY_STORE:\s*([^=]+)=([^\n]+)'
+    matches = re.findall(pattern, response)
+    
+    for key, value in matches:
+        key = key.strip()
+        value = value.strip()
+        
+        if key and value:
+            memory.store(key, value)
+            if CONFIG["color"]:
+                print(f"{MAGENTA}🧠 Nova stored in memory: {key} = {value}{RESET}")
+            else:
+                print(f"🧠 Nova stored in memory: {key} = {value}")
+            
+            response = response.replace(
+                f"MEMORY_STORE: {key}={value}",
+                f"[Memory stored: {key}]"
+            )
+    
+    return response
+
+
 def execute_python_code(python_code: str, env_vars: Optional[Dict[str, str]] = None) -> int:
     """Run generated Python code in a fresh interpreter process."""
     if CONFIG["show_code"]:
@@ -291,6 +688,95 @@ def execute_python_code(python_code: str, env_vars: Optional[Dict[str, str]] = N
         error(f"Python interpreter not found: {interpreter}")
     except subprocess.SubprocessError as e:
         error(f"Failed to execute Python code: {str(e)}")
+
+
+def run_chat() -> None:
+    """Start an interactive AI chat session with tools."""
+    if CONFIG["color"]:
+        print(f"{BOLD}{CYAN}NOVA CODING AGENT{RESET}")
+        print(f"{CYAN}Your AI-powered development assistant by NovaCompile.{RESET}")
+        print(f"{CYAN}Special commands:{RESET}")
+        print(f"{CYAN}  ;edit - Grant permission to edit files{RESET}")
+        print(f"{CYAN}  ;share - Share all file information with Nova{RESET}")
+        print(f"{CYAN}  :clear_memory - Clear AI's memory{RESET}")
+        print(f"{CYAN}  Type 'exit' or 'quit' to leave.{RESET}")
+        print(f"{CYAN}  Type ':settings' to open the settings menu.{RESET}\n")
+    else:
+        print("NOVA CODING AGENT")
+        print("Your AI-powered development assistant by NovaCompile.")
+        print("Special commands:")
+        print("  ;edit - Grant permission to edit files")
+        print("  ;share - Share all file information with Nova")
+        print("  :clear_memory - Clear AI's memory")
+        print("  Type 'exit' or 'quit' to leave.")
+        print("  Type ':settings' to open the settings menu.\n")
+    
+    chat_history = None
+    permission_granted = False
+    
+    # Load previous conversation history
+    recent_conv = memory.get_recent_conversations(5)
+    if recent_conv:
+        if CONFIG["color"]:
+            print(f"{CYAN}📚 Loaded {len(recent_conv)} previous conversations from memory{RESET}")
+        else:
+            print(f"📚 Loaded {len(recent_conv)} previous conversations from memory")
+    
+    while True:
+        if CONFIG["color"]:
+            prompt = f"{GREEN}you> {RESET}"
+        else:
+            prompt = "you> "
+
+        try:
+            user_input = input(prompt)
+        except EOFError:
+            print()
+            break
+        except KeyboardInterrupt:
+            print()
+            print(f"{YELLOW}Use 'exit' or 'quit' to leave{RESET}" if CONFIG["color"] else "Use 'exit' or 'quit' to leave")
+            continue
+
+        stripped = user_input.strip()
+
+        # Check for settings command
+        if stripped == ":settings":
+            run_settings()
+            continue
+
+        # Check for exit commands
+        if stripped in {"exit", "quit", ":q", ":quit", ":exit", "leave"}:
+            if CONFIG["color"]:
+                print(f"{CYAN}Goodbye! Memory saved.{RESET}")
+            else:
+                print("Goodbye! Memory saved.")
+            memory.close()
+            break
+
+        # Check for memory clear
+        if stripped == ":clear_memory":
+            memory.clear()
+            if CONFIG["color"]:
+                print(f"{GREEN}🧠 Memory cleared successfully!{RESET}")
+            else:
+                print("🧠 Memory cleared successfully!")
+            continue
+
+        if not stripped:
+            continue
+        
+        # Send message to AI
+        if CONFIG["color"]:
+            print(f"{MAGENTA}nova> {RESET}", end="")
+        else:
+            print("nova> ", end="")
+        
+        response, chat_history, permission_granted = chat_with_ai(
+            stripped, chat_history, permission_granted
+        )
+        print(response)
+        print()  # Add blank line for readability
 
 
 def run_shell() -> None:
@@ -390,17 +876,21 @@ def run_settings() -> None:
             print(f"{MAGENTA}========{RESET}")
             print(f"1. Clear cache")
             print(f"2. Show cache info")
-            print(f"3. Toggle execution status messages (currently: {GREEN if CONFIG['show_execution_status'] else RED}{'ON' if CONFIG['show_execution_status'] else 'OFF'}{RESET})")
-            print(f"4. Back")
+            print(f"3. Clear AI memory")
+            print(f"4. Show AI memory")
+            print(f"5. Toggle execution status messages (currently: {GREEN if CONFIG['show_execution_status'] else RED}{'ON' if CONFIG['show_execution_status'] else 'OFF'}{RESET})")
+            print(f"6. Back")
         else:
             print("\nSettings")
             print("========")
             print("1. Clear cache")
             print("2. Show cache info")
-            print(f"3. Toggle execution status messages (currently: {'ON' if CONFIG['show_execution_status'] else 'OFF'})")
-            print("4. Back")
+            print("3. Clear AI memory")
+            print("4. Show AI memory")
+            print(f"5. Toggle execution status messages (currently: {'ON' if CONFIG['show_execution_status'] else 'OFF'})")
+            print("6. Back")
         
-        choice = input("Select an option (1-4): ").strip()
+        choice = input("Select an option (1-6): ").strip()
         
         if choice == "1":
             clear_cache()
@@ -410,6 +900,22 @@ def run_settings() -> None:
             print(f"Cache contains {entries} entries ({size:,} bytes)")
             break
         elif choice == "3":
+            memory.clear()
+            if CONFIG["color"]:
+                print(f"{GREEN}🧠 AI memory cleared successfully!{RESET}")
+            else:
+                print("🧠 AI memory cleared successfully!")
+            break
+        elif choice == "4":
+            memories = memory.get_all()
+            if memories:
+                print("Stored memories:")
+                for key, value in memories.items():
+                    print(f"  {key}: {value}")
+            else:
+                print("No memories stored.")
+            break
+        elif choice == "5":
             CONFIG["show_execution_status"] = not CONFIG["show_execution_status"]
             status = "ON" if CONFIG["show_execution_status"] else "OFF"
             if CONFIG["color"]:
@@ -417,7 +923,7 @@ def run_settings() -> None:
             else:
                 print(f"Execution status messages turned {status}")
             break
-        elif choice == "4":
+        elif choice == "6":
             break
         else:
             warn("Invalid option. Please try again.")
@@ -479,6 +985,17 @@ HELP OPTIONS:
   -h, --help               Show this help message and exit
   --flags                  Display this list of all available flags with descriptions
 
+MODE OPTIONS:
+  -c, --chat               Launch Nova in chat mode (AI conversation with tools)
+  --agent                  Launch Nova in agent mode (AI coding agent with tools)
+  --shell                  Launch Nova in shell mode (transpile and execute code) [default]
+
+CHAT/AGENT MODE TOOLS:
+  ;edit                    Grant permission to edit files
+  ;share                   Share all file information with Nova
+  :clear_memory            Clear AI's memory
+  :settings                Open settings menu
+
 INPUT OPTIONS:
   source_file              Path to the .no file to transpile
   -s, --string TEXT        Transpile and execute a single string of code
@@ -510,10 +1027,13 @@ ENVIRONMENT AND EXECUTION:
   --log-file FILE          Log all transpilations and execution results to a file
 
 SECURITY:
-  --allow-imports LIST Comma-separated list of allowed imports (not yet implemented)
+  --allow-imports LIST     Comma-separated list of allowed imports (not yet implemented)
 
 EXAMPLES:
   nova script.no                          # Run a .no file
+  nova -c                                 # Start chat mode
+  nova --chat                             # Start chat mode (alternative)
+  nova --agent                            # Start agent mode (same as chat)
   nova -s "print('Hello')"                # Run a single string
   nova --settings                         # Open settings menu
   nova script.no -v --show-code           # Verbose mode with code preview
@@ -533,6 +1053,11 @@ def main() -> None:
     # Help options
     parser.add_argument("-h", "--help", action="store_true", help="Show this help message and exit")
     parser.add_argument("--flags", action="store_true", help="Display list of all available flags with descriptions")
+    
+    # Mode options
+    parser.add_argument("-c", "--chat", action="store_true", help="Launch Nova in chat mode (AI conversation with tools)")
+    parser.add_argument("--agent", action="store_true", help="Launch Nova in agent mode (AI coding agent with tools)")
+    parser.add_argument("--shell", action="store_true", help="Launch Nova in shell mode (transpile and execute code)")
     
     # Input options
     parser.add_argument("source_file", nargs="?", help="Path to the .no file")
@@ -609,6 +1134,11 @@ def main() -> None:
     # Handle settings
     if args.settings:
         run_settings()
+        return
+    
+    # Handle chat/agent mode - this must be checked before other input methods
+    if args.chat or args.agent:
+        run_chat()
         return
     
     # Handle stdin
