@@ -8,6 +8,7 @@ Please check the table below to see if the version of the software you are runni
 
 | Version | Supported?         |
 | ------- | ------------------ |
+| 2.3.x   | ✅ Yes             |
 | 1.2.x   | ✅ Yes             |
 | 1.1.x   | 🔄 Security Only   |
 
