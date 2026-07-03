@@ -16,7 +16,7 @@ NovaCompile is an AI-powered runtime engine and transpiler designed to execute u
 
 ## 🚀 Quick Start Guide
 
-To install a permenant binary global executable, run this [install script](install/global-executable.sh) (which [installs this executable](bin/nova)) and ignore steps 1 and 3.
+To install a permenant binary global executable, run this [install script](install/global-executable.sh) (which [installs this executable](bin/nova)) and ignore steps 1 and 3. This is currently significantly limited of features, and will be rarely updated.
 
 
 Follow these three simple steps to configure NovaCompile inside your local workspace or web-shell environment.
