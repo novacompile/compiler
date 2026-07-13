@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="static/logo.png" width="200px" height="200px" />
+  <a href="novacompile.onrender.com"><img src="static/logo.png" width="200px" height="200px" /></a>
   <br /><br />
   <h1>Nova - <span id="version">v2.3.1</span></h1>
   <div>
